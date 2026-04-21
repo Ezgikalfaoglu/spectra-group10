@@ -1,0 +1,424 @@
+/* ═══════════════════════════════════════════════════════
+   SPECTRA · Atelier Light Edition
+   Image Compression System — Editorial Design Language
+   ═══════════════════════════════════════════════════════ */
+
+:root {
+  /* Neutrals — warm paper, not cold white */
+  --paper:      #F6F4EC;
+  --paper-2:    #FAF8F1;
+  --paper-3:    #EFEBDF;
+  --ink:        #0A0B0E;
+  --ink-1:      #1E2027;
+  --ink-2:      #3D414E;
+  --ink-3:      #6C7183;
+  --ink-4:      #A7ABB7;
+  --rule:       #D9D3C2;
+  --rule-soft:  #E6E0CF;
+
+  /* Accent — tightly controlled */
+  --klein:      #1E2AFF;
+  --klein-deep: #0F17B3;
+  --cyan:       #00D4FF;
+  --plum:       #4B1E7A;
+  --amber:      #E0A850;
+  --leaf:       #1F8A5E;
+
+  /* Surfaces */
+  --glass:        rgba(255, 253, 247, 0.72);
+  --glass-stroke: rgba(10, 11, 14, 0.08);
+
+  /* Shadows */
+  --shadow-paper: 0 1px 0 rgba(10,11,14,0.04), 0 12px 32px -18px rgba(10,11,14,0.18);
+  --shadow-lift:  0 1px 0 rgba(10,11,14,0.03), 0 30px 60px -30px rgba(10,11,14,0.35), 0 8px 16px -8px rgba(10,11,14,0.08);
+  --shadow-press: 0 0 0 1px rgba(30,42,255,0.12), 0 8px 24px -8px rgba(30,42,255,0.25);
+
+  /* Type */
+  --font-serif: 'Fraunces', 'Times New Roman', serif;
+  --font-sans:  'Geist', -apple-system, system-ui, sans-serif;
+  --font-mono:  'JetBrains Mono', ui-monospace, monospace;
+
+  /* Radii */
+  --r-xs: 4px; --r-sm: 8px; --r-md: 12px; --r-lg: 18px; --r-xl: 28px;
+}
+
+/* ─── body ─── */
+body {
+  font-family: var(--font-sans);
+  background: var(--paper);
+  color: var(--ink-1);
+  font-feature-settings: "ss01", "ss02", "cv11";
+}
+
+/* Atmospheric canvas */
+.spectra-bg::before {
+  content: '';
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(ellipse 60% 40% at 15% 5%, rgba(30,42,255,0.05), transparent 60%),
+    radial-gradient(ellipse 50% 35% at 95% 80%, rgba(75,30,122,0.04), transparent 70%),
+    radial-gradient(ellipse 80% 60% at 50% 110%, rgba(224,168,80,0.04), transparent 70%);
+  pointer-events: none; z-index: 0;
+}
+.spectra-bg::after {
+  content: '';
+  position: fixed; inset: 0;
+  opacity: 0.5;
+  pointer-events: none; z-index: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.04 0 0 0 0 0.04 0 0 0 0 0.05 0 0 0 0.06 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ─── Typography helpers ─── */
+.sp-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+.sp-eyebrow::before {
+  content: '';
+  width: 24px; height: 1px;
+  background: var(--klein);
+}
+
+/* ─── Keyframes ─── */
+@keyframes sp-pulse { 0%,100%{ opacity:1; } 50%{ opacity:0.5; } }
+@keyframes sp-spin  { to { transform: rotate(360deg); } }
+@keyframes sp-shimmer {
+  0%   { transform: translateX(-60px); }
+  100% { transform: translateX(400px); }
+}
+@keyframes sp-waveBar {
+  0%, 100% { height: 20%; opacity: 0.3; }
+  50%      { height: 90%; opacity: 1;   }
+}
+@keyframes sp-pstepPulse {
+  0%,100% { box-shadow: 0 0 0 6px rgba(30,42,255,0.12), 0 4px 16px -4px rgba(30,42,255,0.5); }
+  50%     { box-shadow: 0 0 0 10px rgba(30,42,255,0.06), 0 8px 24px -4px rgba(30,42,255,0.6); }
+}
+
+/* ─── Nav ─── */
+.sp-nav {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(246,244,236,0.86);
+  backdrop-filter: blur(18px) saturate(120%);
+  -webkit-backdrop-filter: blur(18px) saturate(120%);
+  border-bottom: 1px solid var(--rule);
+}
+.sp-nav-link {
+  padding: 8px 14px;
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 500;
+  border-radius: 100px;
+  color: var(--ink-2);
+  text-decoration: none;
+  transition: all 0.2s;
+}
+.sp-nav-link:hover { color: var(--ink); background: var(--paper-3); }
+.sp-nav-link-active { color: var(--ink); }
+
+/* ─── Buttons ─── */
+.sp-btn {
+  display: inline-flex; align-items: center; gap: 10px;
+  font-family: var(--font-sans); font-size: 13.5px; font-weight: 500;
+  cursor: pointer; border: none; text-decoration: none;
+  transition: all 0.22s cubic-bezier(0.4,0,0.2,1);
+  padding: 12px 20px; border-radius: 100px; white-space: nowrap;
+}
+.sp-btn-primary {
+  background: var(--ink); color: var(--paper);
+  box-shadow: 0 4px 12px -4px rgba(10,11,14,0.25);
+}
+.sp-btn-primary:hover {
+  background: var(--klein);
+  box-shadow: 0 8px 24px -8px rgba(30,42,255,0.45);
+  transform: translateY(-1px);
+}
+.sp-btn-klein {
+  background: var(--klein); color: white;
+  box-shadow: 0 4px 16px -4px rgba(30,42,255,0.4);
+}
+.sp-btn-klein:hover {
+  background: var(--klein-deep);
+  box-shadow: 0 8px 28px -6px rgba(30,42,255,0.6);
+  transform: translateY(-1px);
+}
+.sp-btn-ghost {
+  background: transparent; color: var(--ink-1);
+  border: 1px solid var(--rule);
+}
+.sp-btn-ghost:hover { background: var(--paper-2); border-color: var(--ink-3); }
+.sp-btn-sm { padding: 8px 16px; font-size: 12.5px; }
+
+/* ─── Card ─── */
+.sp-card {
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-paper);
+}
+.sp-card-lift {
+  box-shadow: var(--shadow-lift);
+  transition: all 0.3s;
+}
+.sp-card-lift:hover {
+  transform: translateY(-2px);
+  border-color: var(--ink-3);
+}
+
+/* ─── Cover ─── */
+.sp-cover-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 80px;
+  align-items: center;
+}
+.sp-cover-bg-grid {
+  position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    linear-gradient(var(--rule-soft) 1px, transparent 1px),
+    linear-gradient(90deg, var(--rule-soft) 1px, transparent 1px);
+  background-size: 96px 96px;
+  mask-image: radial-gradient(ellipse 70% 60% at 60% 50%, black, transparent 85%);
+  opacity: 0.45;
+}
+
+/* ─── Section heading ─── */
+.sp-sec-head {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 80px;
+  margin-bottom: 72px;
+  padding-bottom: 40px;
+  border-bottom: 1px solid var(--rule);
+  align-items: end;
+}
+
+/* ─── Agency cards ─── */
+.sp-agency {
+  background: var(--paper-2); border: 1px solid var(--rule);
+  border-radius: var(--r-lg); padding: 32px;
+  position: relative; overflow: hidden; transition: all 0.3s;
+}
+.sp-agency:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); border-color: var(--ink-3); }
+.sp-agency-mark {
+  position: absolute; top: 0; right: 0;
+  width: 80px; height: 80px;
+  background: var(--ink); color: var(--paper);
+  display: flex; align-items: flex-end; justify-content: flex-end;
+  padding: 10px 14px;
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.15em;
+  border-bottom-left-radius: var(--r-md);
+  clip-path: polygon(100% 0, 100% 100%, 0 100%, 30% 30%);
+}
+.sp-agency-mark-klein { background: var(--klein); }
+.sp-agency-mark-plum  { background: var(--plum);  }
+
+/* ─── Synthesis ─── */
+.sp-synthesis {
+  margin-top: 40px; padding: 40px 48px;
+  background: var(--ink); color: var(--paper);
+  border-radius: var(--r-xl); position: relative; overflow: hidden;
+}
+.sp-synthesis::before {
+  content: ''; position: absolute; top: -40%; right: -10%;
+  width: 60%; height: 160%;
+  background: radial-gradient(circle, rgba(30,42,255,0.4), transparent 60%);
+  pointer-events: none;
+}
+
+/* ─── Workspace ─── */
+.sp-workspace {
+  display: grid;
+  grid-template-columns: 300px 1fr 290px;
+  min-height: 760px;
+}
+.sp-rail {
+  padding: 24px 20px;
+  border-right: 1px solid var(--rule);
+  background: linear-gradient(180deg, var(--paper-2), var(--paper-2) 70%, rgba(239,235,223,0.6));
+  display: flex; flex-direction: column; gap: 22px; overflow: hidden;
+}
+.sp-stage {
+  padding: 24px; display: flex; flex-direction: column;
+  gap: 20px; min-width: 0;
+}
+.sp-observation {
+  padding: 24px 20px;
+  border-left: 1px solid var(--rule);
+  background: var(--paper-2);
+  display: flex; flex-direction: column; gap: 20px; overflow-y: auto;
+}
+
+/* ─── Pipeline steps ─── */
+.sp-pstep-dot {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: white; border: 1px solid var(--rule);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: 11px; color: var(--ink-3);
+  position: relative; z-index: 2; transition: all 0.3s;
+}
+.sp-pstep-dot-done {
+  background: var(--ink); border-color: var(--ink); color: var(--paper);
+}
+.sp-pstep-dot-active {
+  background: var(--klein); border-color: var(--klein); color: white;
+  animation: sp-pstepPulse 2s ease-in-out infinite;
+}
+
+/* ─── Insight (dark) ─── */
+.sp-insight {
+  padding: 22px; border-radius: var(--r-lg);
+  background: var(--ink); color: var(--paper);
+  position: relative; overflow: hidden;
+}
+.sp-insight::before {
+  content: ''; position: absolute;
+  top: -30%; right: -30%;
+  width: 80%; height: 120%;
+  background: radial-gradient(circle, rgba(30,42,255,0.35), transparent 60%);
+  pointer-events: none;
+}
+
+/* ─── Slider (comparison) ─── */
+.sp-slider-thumb {
+  width: 18px; height: 18px; border-radius: 50%; background: white;
+  box-shadow: 0 0 0 1px var(--klein), 0 4px 12px -2px rgba(30,42,255,0.4);
+}
+
+/* ─── Orb (processing) ─── */
+.sp-orb-ring {
+  position: absolute; border: 1px dashed var(--rule);
+  border-radius: 50%; animation: sp-spin 22s linear infinite;
+}
+.sp-orb-ring::before {
+  content: ''; position: absolute; top: -4px; left: 50%;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--klein); transform: translateX(-50%);
+}
+.sp-wbar {
+  background: var(--klein); border-radius: 1px;
+  animation: sp-waveBar 1.2s ease-in-out infinite;
+}
+
+/* ─── History table ─── */
+.sp-hist-row {
+  display: grid;
+  grid-template-columns: 44px 1.4fr 0.8fr 0.6fr 0.8fr 0.8fr 1fr 70px;
+  align-items: center; padding: 12px 22px; gap: 10px;
+  border-bottom: 1px solid var(--rule-soft);
+  font-size: 12.5px; color: var(--ink-1);
+  transition: background 0.15s;
+}
+.sp-hist-row:hover { background: var(--paper-3); }
+
+/* ─── Screen chrome ─── */
+.sp-screen-chrome {
+  display: flex; align-items: center; padding: 14px 22px;
+  border-bottom: 1px solid var(--rule); background: var(--paper-2); gap: 14px;
+}
+
+/* ─── Metric list ─── */
+.sp-metric-item {
+  padding: 18px 0; border-bottom: 1px solid var(--rule);
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+/* ─── Pipe progress shimmer ─── */
+.sp-pipe-fill {
+  height: 100%; background: var(--klein);
+  border-radius: 3px; position: relative; overflow: hidden;
+}
+.sp-pipe-fill::after {
+  content: ''; position: absolute; inset: 0;
+  width: 60px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.8), transparent);
+  animation: sp-shimmer 1.6s linear infinite;
+}
+
+/* ─── Upload zone ─── */
+.sp-upload-zone {
+  padding: 16px; background: white;
+  border: 1px dashed var(--rule);
+  border-radius: var(--r-md);
+}
+
+/* ─── Segmented control ─── */
+.sp-seg {
+  display: flex; padding: 3px;
+  background: var(--paper-3); border: 1px solid var(--rule);
+  border-radius: 10px;
+}
+.sp-seg-btn {
+  flex: 1; padding: 9px; border: none; background: transparent;
+  color: var(--ink-2); font-family: var(--font-sans); font-size: 12.5px;
+  font-weight: 500; border-radius: 7px; cursor: pointer; transition: all 0.2s;
+}
+.sp-seg-btn-active {
+  background: var(--ink); color: var(--paper);
+  box-shadow: 0 2px 8px -2px rgba(10,11,14,0.3);
+}
+
+/* ─── Pills ─── */
+.sp-pill {
+  flex: 1; padding: 9px 0; background: white; border: 1px solid var(--rule);
+  border-radius: 8px; color: var(--ink-2); font-family: var(--font-mono);
+  font-size: 12px; text-align: center; cursor: pointer; transition: all 0.2s;
+}
+.sp-pill:hover { border-color: var(--ink-3); }
+.sp-pill-active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+/* ─── Select ─── */
+.sp-select {
+  width: 100%; padding: 10px 14px; background: white;
+  border: 1px solid var(--rule); border-radius: 10px;
+  color: var(--ink); font-family: var(--font-mono); font-size: 12.5px;
+  outline: none; cursor: pointer; transition: all 0.2s;
+  appearance: none;
+}
+.sp-select:hover  { border-color: var(--klein); box-shadow: var(--shadow-press); }
+.sp-select:focus  { border-color: var(--klein); box-shadow: var(--shadow-press); }
+
+/* ─── Range slider ─── */
+.sp-range,
+input[type=range] {
+  width: 100%; height: 4px; border-radius: 2px;
+  appearance: none; cursor: pointer; outline: none;
+}
+.sp-range::-webkit-slider-thumb,
+input[type=range]::-webkit-slider-thumb {
+  appearance: none; width: 18px; height: 18px; border-radius: 50%;
+  background: white; box-shadow: 0 0 0 2px var(--klein), 0 4px 12px -2px rgba(30,42,255,0.4);
+  cursor: pointer; transition: box-shadow 0.2s;
+}
+input[type=range]::-moz-range-thumb {
+  width: 16px; height: 16px; border-radius: 50%; border: none;
+  background: white; box-shadow: 0 0 0 2px var(--klein), 0 4px 12px -2px rgba(30,42,255,0.4);
+  cursor: pointer;
+}
+
+/* ─── Footer ─── */
+.sp-footer {
+  border-top: 1px solid var(--rule); padding: 80px 0 48px; margin-top: 120px;
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 1200px) {
+  .sp-workspace { grid-template-columns: 1fr; }
+  .sp-rail, .sp-observation { border: none; border-bottom: 1px solid var(--rule); }
+  .sp-cover-grid { grid-template-columns: 1fr; gap: 60px; }
+  .sp-sec-head { grid-template-columns: 1fr; gap: 20px; }
+}
+@media (max-width: 900px) {
+  .sp-hist-row { grid-template-columns: 40px 1fr 80px; }
+  .sp-hist-row > *:nth-child(n+4) { display: none; }
+}
+@media (max-width: 720px) {
+  .sp-workspace { grid-template-columns: 1fr; }
+}
