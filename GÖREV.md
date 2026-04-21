@@ -1,10 +1,21 @@
 # 👋 Azra — Senin Branch'in: `feature/results-azra`
 
-## StackBlitz'te Aç (tarayıcıdan, kurulum gerektirmez)
-👉 https://stackblitz.com/github/Ezgikalfaoglu/spectra-group10/tree/feature/results-azra
+## GitHub Codespaces ile Aç (Tavsiye Edilen — kurulum gerektirmez)
 
-## Yerel Çalıştırma
+1. `github.com/Ezgikalfaoglu/spectra-group10` → branch olarak **`feature/results-azra`** seç
+2. Yeşil **`<> Code`** butonu → **Codespaces** sekmesi → **Create codespace on feature/results-azra**
+3. Tarayıcıda VS Code açılır, terminale yaz:
 ```bash
+npm install
+npm run dev
+```
+4. Açılan port linkine tıkla → `/results`, `/history`, `/dashboard` canlı görünür
+
+## Yerel Çalıştırma (isteğe bağlı)
+```bash
+git clone https://github.com/Ezgikalfaoglu/spectra-group10.git
+cd spectra-group10
+git checkout feature/results-azra
 npm install
 npm run dev
 # Sayfaların: /results  /history  /dashboard
