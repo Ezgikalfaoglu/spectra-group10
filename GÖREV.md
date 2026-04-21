@@ -1,10 +1,21 @@
 # 👋 Melike — Senin Branch'in: `feature/processing-melike`
 
-## StackBlitz'te Aç (tarayıcıdan, kurulum gerektirmez)
-👉 https://stackblitz.com/github/Ezgikalfaoglu/spectra-group10/tree/feature/processing-melike
+## GitHub Codespaces ile Aç (Tavsiye Edilen — kurulum gerektirmez)
 
-## Yerel Çalıştırma
+1. `github.com/Ezgikalfaoglu/spectra-group10` → branch olarak **`feature/processing-melike`** seç
+2. Yeşil **`<> Code`** butonu → **Codespaces** sekmesi → **Create codespace on feature/processing-melike**
+3. Tarayıcıda VS Code açılır, terminale yaz:
 ```bash
+npm install
+npm run dev
+```
+4. Açılan port linkine tıkla → `http://localhost:3000/processing` canlı görünür
+
+## Yerel Çalıştırma (isteğe bağlı)
+```bash
+git clone https://github.com/Ezgikalfaoglu/spectra-group10.git
+cd spectra-group10
+git checkout feature/processing-melike
 npm install
 npm run dev
 # Tarayıcı: http://localhost:3000/processing
