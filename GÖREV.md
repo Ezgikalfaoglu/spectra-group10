@@ -1,10 +1,21 @@
 # 👋 Fatmanur — Senin Branch'in: `feature/transform-fatmanur`
 
-## StackBlitz'te Aç (tarayıcıdan, kurulum gerektirmez)
-👉 https://stackblitz.com/github/Ezgikalfaoglu/spectra-group10/tree/feature/transform-fatmanur
+## GitHub Codespaces ile Aç (Tavsiye Edilen — kurulum gerektirmez)
 
-## Yerel Çalıştırma
+1. `github.com/Ezgikalfaoglu/spectra-group10` → branch olarak **`feature/transform-fatmanur`** seç
+2. Yeşil **`<> Code`** butonu → **Codespaces** sekmesi → **Create codespace on feature/transform-fatmanur**
+3. Tarayıcıda VS Code açılır, terminale yaz:
 ```bash
+npm install
+npm run dev
+```
+4. Açılan port linkine tıkla → `http://localhost:3000/transform` canlı görünür
+
+## Yerel Çalıştırma (isteğe bağlı)
+```bash
+git clone https://github.com/Ezgikalfaoglu/spectra-group10.git
+cd spectra-group10
+git checkout feature/transform-fatmanur
 npm install
 npm run dev
 # Tarayıcı: http://localhost:3000/transform
