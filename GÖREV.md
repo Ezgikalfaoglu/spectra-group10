@@ -1,10 +1,21 @@
 # 👋 Gül Deniz — Senin Branch'in: `feature/upload-guldeniz`
 
-## StackBlitz'te Aç (tarayıcıdan, kurulum gerektirmez)
-👉 https://stackblitz.com/github/Ezgikalfaoglu/spectra-group10/tree/feature/upload-guldeniz
+## GitHub Codespaces ile Aç (Tavsiye Edilen — kurulum gerektirmez)
 
-## Yerel Çalıştırma
+1. `github.com/Ezgikalfaoglu/spectra-group10` → branch olarak **`feature/upload-guldeniz`** seç
+2. Yeşil **`<> Code`** butonu → **Codespaces** sekmesi → **Create codespace on feature/upload-guldeniz**
+3. Tarayıcıda VS Code açılır, terminale yaz:
 ```bash
+npm install
+npm run dev
+```
+4. Açılan port linkine tıkla → `http://localhost:3000/upload` canlı görünür
+
+## Yerel Çalıştırma (isteğe bağlı)
+```bash
+git clone https://github.com/Ezgikalfaoglu/spectra-group10.git
+cd spectra-group10
+git checkout feature/upload-guldeniz
 npm install
 npm run dev
 # Tarayıcı: http://localhost:3000/upload
