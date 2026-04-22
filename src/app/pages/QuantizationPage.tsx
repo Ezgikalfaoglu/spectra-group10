@@ -14,11 +14,13 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import {
   SlidersHorizontal, ArrowRight, AlertTriangle, Info,
-  Lock, Unlock, Play, TrendingDown, TrendingUp,
+  Lock,
 } from 'lucide-react';
+import { Switch } from '@/app/components/ui/switch';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/app/components/ui/collapsible';
 import { PipelineStepper } from '../components/PipelineStepper';
 
 interface QuantizationSettings {
@@ -33,27 +35,22 @@ interface StoredTransform {
   decompositionLevel: number;
 }
 
-/* Rough quality estimates for the preview chip */
-function estimateMetrics(method: string, stepSize: number, decompositionLevel: number, lossless: boolean) {
-  if (lossless) return { psnr: '∞', cr: '2–3:1', grade: 'Lossless' };
-  if (method === 'jpeg2000') {
-    const lvlBonus = (decompositionLevel - 1) * 0.4;
-    const psnr = Math.max(22, 38.5 - (stepSize / 32) * 16 + lvlBonus + 1.2).toFixed(1);
-    const cr = (5 + (stepSize / 4) * 2.1).toFixed(1);
-    return { psnr: `~${psnr}`, cr: `~${cr}:1`, grade: parseFloat(psnr) >= 35 ? 'Good' : parseFloat(psnr) >= 30 ? 'Acceptable' : 'Lossy' };
-  } else {
-    const psnr = Math.max(20, 36.5 - (stepSize / 32) * 14).toFixed(1);
-    const cr = (4 + (stepSize / 4) * 1.8).toFixed(1);
-    return { psnr: `~${psnr}`, cr: `~${cr}:1`, grade: parseFloat(psnr) >= 35 ? 'Good' : parseFloat(psnr) >= 30 ? 'Acceptable' : 'Lossy' };
-  }
-}
-
-const GRADE_COLOR: Record<string, string> = {
-  'Lossless':   'var(--leaf)',
-  'Good':       'var(--klein)',
-  'Acceptable': 'var(--amber)',
-  'Lossy':      '#d4574c',
+const DEFAULT_TRANSFORM: StoredTransform = {
+  method: 'jpeg2000',
+  waveletFilter: 'db4',
+  decompositionLevel: 3,
 };
+
+/* Task-specific mock estimates */
+function estimateMetrics(stepSize: number, lossless: boolean) {
+  if (lossless) return { psnr: '∞', cr: '1:1' };
+  const estPSNR = Math.max(20, 42 - stepSize * 0.35).toFixed(1);
+  const estCR = `${(1 + stepSize * 0.14).toFixed(1)}:1`;
+  return {
+    psnr: estPSNR,
+    cr: estCR,
+  };
+}
 
 export function QuantizationPage() {
   const navigate = useNavigate();
@@ -66,22 +63,38 @@ export function QuantizationPage() {
   });
 
   useEffect(() => {
+    let forcedLossless = false;
+
     const upload = localStorage.getItem('spectra_upload');
     if (upload) {
       try {
         const u = JSON.parse(upload);
         const forced = ['fingerprint', 'biomedical'].includes(u.imageType || '');
+        forcedLossless = forced;
         setIsLosslessForced(forced);
-        if (forced) setSettings(s => ({ ...s, lossless: true }));
       } catch {}
     }
+
     const saved = localStorage.getItem('spectra_transform');
     if (saved) {
-      try { setTransform(JSON.parse(saved)); } catch {}
+      try {
+        setTransform(JSON.parse(saved));
+      } catch {
+        setTransform(DEFAULT_TRANSFORM);
+        localStorage.setItem('spectra_transform', JSON.stringify(DEFAULT_TRANSFORM));
+      }
+    } else {
+      setTransform(DEFAULT_TRANSFORM);
+      localStorage.setItem('spectra_transform', JSON.stringify(DEFAULT_TRANSFORM));
     }
+
     const savedQ = localStorage.getItem('spectra_quantization');
     if (savedQ) {
       try { setSettings(JSON.parse(savedQ)); } catch {}
+    }
+
+    if (forcedLossless) {
+      setSettings(s => ({ ...s, lossless: true }));
     }
   }, []);
 
@@ -93,14 +106,13 @@ export function QuantizationPage() {
     navigate('/processing');
   };
 
-  const metrics = estimateMetrics(
-    transform?.method || 'jpeg2000',
-    settings.stepSize,
-    transform?.decompositionLevel || 3,
-    settings.lossless,
-  );
-
-  const gradeColor = GRADE_COLOR[metrics.grade] || 'var(--ink)';
+  const metrics = estimateMetrics(settings.stepSize, settings.lossless);
+  const psnrValue = settings.lossless ? Infinity : Number(metrics.psnr);
+  const psnrColor = psnrValue > 35
+    ? 'var(--leaf)'
+    : psnrValue >= 28
+      ? 'var(--amber)'
+      : '#d4574c';
 
   /* Step size qualitative label */
   const stepLabel = settings.stepSize <= 8
@@ -112,6 +124,7 @@ export function QuantizationPage() {
         : settings.stepSize <= 40
           ? 'High compression'
           : 'Maximum compression';
+  const controlsDisabled = settings.lossless;
 
   return (
     <motion.div
@@ -160,34 +173,27 @@ export function QuantizationPage() {
           {/* Lossless toggle */}
           <div className="sp-card" style={{ overflow: 'hidden' }}>
             <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--rule)', display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 28, height: 28, borderRadius: 8, background: isLosslessForced ? 'rgba(224,168,80,0.12)' : 'rgba(30,42,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {settings.lossless
-                  ? <Lock style={{ width: 14, height: 14, color: isLosslessForced ? 'var(--amber)' : 'var(--leaf)' }} />
-                  : <Unlock style={{ width: 14, height: 14, color: 'var(--klein)' }} />
-                }
+              <div style={{ width: 28, height: 28, borderRadius: 8, background: settings.lossless ? 'rgba(224,168,80,0.12)' : 'rgba(30,42,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Lock style={{ width: 14, height: 14, color: settings.lossless ? 'var(--amber)' : 'var(--klein)' }} />
               </div>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.22em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>COMPRESSION MODE</span>
             </div>
-            <div style={{ padding: 20 }}>
-              <button
-                onClick={() => !isLosslessForced && update('lossless', !settings.lossless)}
+            <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div
                 style={{
                   width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   padding: '16px 18px', borderRadius: 'var(--r-md)',
-                  border: `1px solid ${settings.lossless ? 'rgba(31,138,94,0.35)' : 'var(--rule)'}`,
-                  background: settings.lossless ? 'rgba(31,138,94,0.05)' : 'white',
-                  cursor: isLosslessForced ? 'not-allowed' : 'pointer', transition: 'all 0.2s', textAlign: 'left',
+                  border: `1px solid ${settings.lossless ? 'rgba(224,168,80,0.35)' : 'var(--rule)'}`,
+                  background: settings.lossless ? 'rgba(224,168,80,0.06)' : 'white',
+                  textAlign: 'left',
                 }}
               >
                 <div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, fontWeight: 600, color: settings.lossless ? 'var(--leaf)' : 'var(--ink)', letterSpacing: '0.05em', marginBottom: 3 }}>
-                    {settings.lossless ? 'Lossless Reconstruction' : 'Lossy Compression'}
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, fontWeight: 600, color: settings.lossless ? 'var(--amber)' : 'var(--ink)', letterSpacing: '0.05em', marginBottom: 3 }}>
+                    Lossless Mode
                   </div>
                   <p style={{ fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.4 }}>
-                    {settings.lossless
-                      ? 'Perfect reconstruction. No coefficient precision loss. Larger file size.'
-                      : 'Reduces precision via step size. Controls quality-size trade-off.'
-                    }
+                    When enabled, quantization is bypassed and output quality is theoretically unlimited.
                   </p>
                   {isLosslessForced && (
                     <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.12em', color: 'var(--amber)', textTransform: 'uppercase', marginTop: 4, display: 'block' }}>
@@ -195,32 +201,26 @@ export function QuantizationPage() {
                     </span>
                   )}
                 </div>
-                {/* Toggle switch */}
-                <div style={{
-                  width: 44, height: 24, borderRadius: 12, flexShrink: 0,
-                  background: settings.lossless ? 'var(--leaf)' : 'var(--paper-3)',
-                  border: `1px solid ${settings.lossless ? 'var(--leaf)' : 'var(--rule)'}`,
-                  position: 'relative', transition: 'all 0.2s', marginLeft: 12,
-                }}>
-                  <span style={{
-                    position: 'absolute', top: 2, left: settings.lossless ? 22 : 2,
-                    width: 18, height: 18, borderRadius: '50%', background: 'white',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.15)', transition: 'left 0.2s', display: 'block',
-                  }} />
+                <Switch
+                  checked={settings.lossless}
+                  onCheckedChange={(checked) => update('lossless', checked)}
+                  disabled={isLosslessForced}
+                  className="data-[state=checked]:bg-[var(--amber)] data-[state=unchecked]:bg-[var(--paper-3)]"
+                />
+              </div>
+              {settings.lossless && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderRadius: 'var(--r-sm)', background: 'rgba(224,168,80,0.1)', border: '1px solid rgba(224,168,80,0.3)' }}>
+                  <Lock style={{ width: 13, height: 13, color: 'var(--amber)', flexShrink: 0 }} />
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, letterSpacing: '0.08em', color: 'var(--amber)', textTransform: 'uppercase' }}>
+                    Lossless mode active
+                  </span>
                 </div>
-              </button>
+              )}
             </div>
           </div>
 
           {/* Step size — disabled in lossless */}
-          <AnimatePresence>
-            {!settings.lossless && (
-              <motion.div
-                key="step-controls"
-                initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-                style={{ overflow: 'hidden' }}
-              >
-                <div className="sp-card" style={{ overflow: 'hidden' }}>
+          <div className="sp-card" style={{ overflow: 'hidden', opacity: controlsDisabled ? 0.5 : 1, transition: 'opacity 0.2s' }}>
                   <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--rule)', display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(30,42,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <SlidersHorizontal style={{ width: 14, height: 14, color: 'var(--klein)' }} />
@@ -234,56 +234,60 @@ export function QuantizationPage() {
                       <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.2em', color: 'var(--ink-3)', textTransform: 'uppercase', marginBottom: 10 }}>
                         Quantization Type
                       </label>
-                      <div style={{ display: 'flex', gap: 10 }}>
+                      <div className="sp-seg">
                         {(['uniform', 'scalar'] as const).map(q => (
-                          <label key={q} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', flex: 1, padding: '10px 14px', borderRadius: 'var(--r-sm)', border: `1px solid ${settings.quantizationType === q ? 'rgba(30,42,255,0.35)' : 'var(--rule)'}`, background: settings.quantizationType === q ? 'rgba(30,42,255,0.04)' : 'white', transition: 'all 0.18s' }}>
-                            <div style={{ position: 'relative', width: 16, height: 16, flexShrink: 0 }}>
-                              <input
-                                type="radio"
-                                checked={settings.quantizationType === q}
-                                onChange={() => update('quantizationType', q)}
-                                style={{ appearance: 'none', width: 16, height: 16, borderRadius: '50%', border: `2px solid ${settings.quantizationType === q ? 'var(--klein)' : 'var(--rule)'}`, cursor: 'pointer', background: 'white', outline: 'none' }}
-                              />
-                              {settings.quantizationType === q && (
-                                <span style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 7, height: 7, borderRadius: '50%', background: 'var(--klein)', display: 'block' }} />
-                              )}
-                            </div>
-                            <div>
-                              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: settings.quantizationType === q ? 'var(--klein)' : 'var(--ink)', fontWeight: settings.quantizationType === q ? 600 : 400, textTransform: 'capitalize' }}>{q}</div>
-                              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-4)', letterSpacing: '0.04em' }}>
-                                {q === 'uniform' ? 'Same Δ for all bands' : 'Adaptive per subband'}
-                              </div>
-                            </div>
-                          </label>
+                          <button
+                            key={q}
+                            type="button"
+                            onClick={() => update('quantizationType', q)}
+                            className={`sp-seg-btn ${settings.quantizationType === q ? 'sp-seg-btn-active' : ''}`}
+                            disabled={controlsDisabled}
+                            style={{ cursor: controlsDisabled ? 'not-allowed' : 'pointer' }}
+                          >
+                            {q === 'uniform' ? 'Uniform' : 'Scalar'}
+                          </button>
                         ))}
                       </div>
                     </div>
 
                     {/* Step size slider */}
                     <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                         <label style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.2em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>Step Size (Δ)</label>
-                        <div style={{ textAlign: 'right' }}>
-                          <span style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 28, color: 'var(--ink)', lineHeight: 1, letterSpacing: '-0.01em' }}>{settings.stepSize}</span>
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-4)', display: 'block', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 2 }}>{stepLabel}</span>
-                        </div>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 22, color: 'var(--klein)', lineHeight: 1, letterSpacing: '0.03em' }}>{settings.stepSize}</span>
                       </div>
 
                       {/* Custom slider */}
-                      <div style={{ position: 'relative', marginBottom: 8 }}>
+                      <div style={{ position: 'relative', height: 28, display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+                        <div style={{ position: 'absolute', left: 0, right: 0, height: 4, borderRadius: 2, background: 'var(--paper-3)', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${((settings.stepSize - 1) / 63) * 100}%`, background: 'var(--klein)', borderRadius: 2 }} />
+                        </div>
                         <input
                           type="range" min={1} max={64} value={settings.stepSize}
                           onChange={e => update('stepSize', Number(e.target.value))}
+                          disabled={controlsDisabled}
                           style={{
-                            width: '100%', height: 4, appearance: 'none', outline: 'none',
-                            background: `linear-gradient(90deg, var(--klein) ${(settings.stepSize / 64) * 100}%, var(--paper-3) ${(settings.stepSize / 64) * 100}%)`,
-                            borderRadius: 2, cursor: 'pointer',
+                            position: 'absolute', left: 0, right: 0, width: '100%',
+                            height: 4, opacity: 0, cursor: controlsDisabled ? 'not-allowed' : 'pointer', zIndex: 2,
+                          }}
+                        />
+                        <div
+                          className="sp-slider-thumb"
+                          style={{
+                            position: 'absolute',
+                            left: `${((settings.stepSize - 1) / 63) * 100}%`,
+                            transform: 'translateX(-50%)',
+                            pointerEvents: 'none',
+                            zIndex: 1,
                           }}
                         />
                       </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-4)', letterSpacing: '0.1em' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-4)', letterSpacing: '0.1em', marginBottom: 6 }}>
                         <span>1 · MAX QUALITY</span>
                         <span>64 · MAX COMPRESSION</span>
+                      </div>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-4)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                        {stepLabel}
                       </div>
                     </div>
 
@@ -300,14 +304,17 @@ export function QuantizationPage() {
                         ].map(p => (
                           <button
                             key={p.label}
+                            type="button"
                             onClick={() => update('stepSize', p.value)}
+                            disabled={controlsDisabled}
                             style={{
                               padding: '5px 12px', borderRadius: 100,
                               border: `1px solid ${settings.stepSize === p.value ? 'rgba(30,42,255,0.35)' : 'var(--rule)'}`,
                               background: settings.stepSize === p.value ? 'rgba(30,42,255,0.06)' : 'white',
                               color: settings.stepSize === p.value ? 'var(--klein)' : 'var(--ink-3)',
                               fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.08em',
-                              cursor: 'pointer', transition: 'all 0.15s',
+                              cursor: controlsDisabled ? 'not-allowed' : 'pointer',
+                              transition: 'all 0.15s',
                             }}
                           >
                             {p.label}&nbsp;<span style={{ opacity: 0.6 }}>Δ{p.value}</span>
@@ -316,10 +323,7 @@ export function QuantizationPage() {
                       </div>
                     </div>
                   </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          </div>
 
           {/* Navigation */}
           <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
@@ -328,17 +332,11 @@ export function QuantizationPage() {
             </button>
             <button
               onClick={handleNext}
-              style={{
-                flex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                background: 'var(--klein)', color: 'white',
-                padding: '13px 20px', borderRadius: 100, border: 'none', cursor: 'pointer',
-                fontFamily: 'var(--font-sans)', fontSize: 13.5, fontWeight: 500,
-                boxShadow: '0 4px 16px -4px rgba(30,42,255,0.4)',
-                transition: 'all 0.22s',
-              }}
+              className="sp-btn sp-btn-klein"
+              style={{ flex: 2, justifyContent: 'center' }}
             >
-              <Play style={{ width: 13, height: 13 }} />
-              Run Compression
+              Processing
+              <ArrowRight style={{ width: 14, height: 14 }} />
             </button>
           </div>
         </div>
@@ -353,22 +351,22 @@ export function QuantizationPage() {
               <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.1em', color: 'var(--ink-4)', textTransform: 'uppercase' }}>Live Preview</span>
             </div>
             <div style={{ padding: 24 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 24 }}>
-                {[
-                  { label: 'PSNR', value: metrics.psnr, unit: 'dB', icon: TrendingUp, hint: 'Higher = better' },
-                  { label: 'CR', value: metrics.cr, unit: '', icon: TrendingDown, hint: 'Compression ratio' },
-                  { label: 'Grade', value: metrics.grade, unit: '', hint: 'Quality tier', special: true },
-                ].map(m => (
-                  <div key={m.label} style={{ textAlign: 'center', padding: '16px 12px', background: 'white', border: '1px solid var(--rule)', borderRadius: 'var(--r-md)', position: 'relative', overflow: 'hidden' }}>
-                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: m.special ? gradeColor : 'var(--klein)' }} />
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.2em', color: 'var(--ink-4)', textTransform: 'uppercase', marginBottom: 8 }}>{m.label}</div>
-                    <div style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: m.special ? 18 : 24, color: m.special ? gradeColor : 'var(--ink)', lineHeight: 1 }}>
-                      {m.value}
-                    </div>
-                    {m.unit && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--klein)' }}> {m.unit}</span>}
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-4)', marginTop: 6, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{m.hint}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 24 }}>
+                <div style={{ textAlign: 'center', padding: '16px 12px', background: 'white', border: '1px solid var(--rule)', borderRadius: 'var(--r-md)', position: 'relative', overflow: 'hidden' }}>
+                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: psnrColor }} />
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.2em', color: 'var(--ink-4)', textTransform: 'uppercase', marginBottom: 8 }}>PSNR</div>
+                  <div style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 30, color: psnrColor, lineHeight: 1 }}>
+                    {metrics.psnr}
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, marginLeft: 6 }}>dB</span>
                   </div>
-                ))}
+                </div>
+                <div style={{ textAlign: 'center', padding: '16px 12px', background: 'white', border: '1px solid var(--rule)', borderRadius: 'var(--r-md)', position: 'relative', overflow: 'hidden' }}>
+                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'var(--klein)' }} />
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.2em', color: 'var(--ink-4)', textTransform: 'uppercase', marginBottom: 8 }}>CR</div>
+                  <div style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 30, color: 'var(--ink)', lineHeight: 1 }}>
+                    {metrics.cr}
+                  </div>
+                </div>
               </div>
 
               {/* Visual quality scale */}
@@ -422,13 +420,44 @@ export function QuantizationPage() {
             </div>
           </div>
 
-          {/* Info note */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '14px 18px', background: 'rgba(30,42,255,0.04)', border: '1px solid rgba(30,42,255,0.12)', borderRadius: 'var(--r-md)' }}>
-            <Info style={{ width: 13, height: 13, color: 'var(--klein)', marginTop: 1, flexShrink: 0 }} />
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--ink-2)', lineHeight: 1.6, letterSpacing: '0.02em' }}>
-              Scalar quantization adapts the step size per subband based on frequency significance, typically yielding better results than uniform quantization at the same compression ratio.
-            </p>
-          </div>
+          {/* Collapsible explanation */}
+          <Collapsible className="sp-card" style={{ overflow: 'hidden' }}>
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 10,
+                  padding: '14px 18px',
+                  background: 'rgba(30,42,255,0.04)',
+                  border: 'none',
+                  borderBottom: '1px solid rgba(30,42,255,0.12)',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontFamily: 'var(--font-mono)', fontSize: 10.5, letterSpacing: '0.08em', color: 'var(--klein)', textTransform: 'uppercase' }}>
+                  <Info style={{ width: 13, height: 13, color: 'var(--klein)' }} />
+                  What Do These Settings Mean?
+                </span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-4)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                  Open / Close
+                </span>
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div style={{ padding: '12px 18px 16px' }}>
+                <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--ink-2)', lineHeight: 1.7, letterSpacing: '0.02em' }}>
+                  As step size increases, coefficients are quantized more coarsely and the file compresses better.
+                  This raises Compression Ratio (CR), but usually lowers PSNR and introduces more quality loss.
+                  Lower step sizes preserve quality better, but reduce compression gain.
+                </p>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
         </div>
       </div>
     </motion.div>
