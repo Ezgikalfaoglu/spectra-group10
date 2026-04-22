@@ -55,6 +55,7 @@ function estimateMetrics(stepSize: number, lossless: boolean) {
 export function QuantizationPage() {
   const navigate = useNavigate();
   const [transform, setTransform] = useState<StoredTransform | null>(null);
+  const [isHydrated, setIsHydrated] = useState(false);
   const [isLosslessForced, setIsLosslessForced] = useState(false);
   const [settings, setSettings] = useState<QuantizationSettings>({
     quantizationType: 'scalar',
@@ -96,6 +97,8 @@ export function QuantizationPage() {
     if (forcedLossless) {
       setSettings(s => ({ ...s, lossless: true }));
     }
+
+    setIsHydrated(true);
   }, []);
 
   const update = <K extends keyof QuantizationSettings>(key: K, value: QuantizationSettings[K]) =>
@@ -154,7 +157,7 @@ export function QuantizationPage() {
       </div>
 
       {/* Guard */}
-      {!transform && (
+      {isHydrated && !transform && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
           style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px', background: 'rgba(224,168,80,0.06)', border: '1px solid rgba(224,168,80,0.25)', borderRadius: 'var(--r-md)', marginBottom: 24 }}
         >
