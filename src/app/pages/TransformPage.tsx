@@ -16,8 +16,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Braces, ChevronUp, ChevronDown, ArrowRight, Info,
-  AlertTriangle, Layers, Zap,
+  Braces, ArrowRight, Info, AlertTriangle, Layers, Zap,
 } from 'lucide-react';
 import { PipelineStepper } from '../components/PipelineStepper';
 import { DWTSubbandsViz } from '../components/DWTSubbandsViz';
@@ -36,6 +35,15 @@ interface UploadData {
   dataUrl: string;
   imageType: string;
 }
+
+const DEMO_UPLOAD: UploadData = {
+  name: 'demo_image.png',
+  format: 'PNG',
+  resolution: '512 × 512',
+  sizeKB: 128,
+  dataUrl: '',
+  imageType: 'natural',
+};
 
 const WAVELET_INFO: Record<string, { full: string; description: string; quality: string }> = {
   haar: {
@@ -58,17 +66,20 @@ const WAVELET_INFO: Record<string, { full: string; description: string; quality:
 export function TransformPage() {
   const navigate = useNavigate();
   const [uploadData, setUploadData] = useState<UploadData | null>(null);
+  const [isDemo, setIsDemo] = useState(false);
   const [settings, setSettings] = useState<TransformSettings>({
     method: 'jpeg2000',
     waveletFilter: 'db4',
     decompositionLevel: 3,
   });
 
-  /* ── Load previous data ── */
   useEffect(() => {
     const upload = localStorage.getItem('spectra_upload');
     if (upload) {
       try { setUploadData(JSON.parse(upload)); } catch {}
+    } else {
+      setUploadData(DEMO_UPLOAD);
+      setIsDemo(true);
     }
     const saved = localStorage.getItem('spectra_transform');
     if (saved) {
@@ -86,7 +97,7 @@ export function TransformPage() {
 
   const handleBack = () => navigate('/upload');
 
-  const wavelet = WAVELET_INFO[settings.waveletFilter] || WAVELET_INFO['db4'];
+  const wavelet = WAVELET_INFO[settings.waveletFilter] ?? WAVELET_INFO['db4'];
 
   return (
     <motion.div
@@ -115,14 +126,46 @@ export function TransformPage() {
         </p>
       </div>
 
-      {/* Guard: no upload */}
-      {!uploadData && (
+      {/* Demo Mode Banner */}
+      {isDemo && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 12,
+            padding: '14px 20px',
+            background: 'rgba(0,212,255,0.06)',
+            border: '1px solid rgba(0,212,255,0.25)',
+            borderRadius: 'var(--r-md)', marginBottom: 20,
+          }}
+        >
+          <span style={{
+            fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.18em',
+            textTransform: 'uppercase', padding: '3px 10px', borderRadius: 100,
+            background: 'var(--cyan)', color: 'var(--paper)', fontWeight: 600,
+          }}>Demo Modu</span>
+          <p style={{ fontSize: 12.5, color: 'var(--ink-2)', fontFamily: 'var(--font-mono)' }}>
+            Yüklenmiş görüntü bulunamadı. Varsayılan değerlerle devam ediyorsunuz.{' '}
+            <Link to="/upload" style={{ color: 'var(--klein)', textDecoration: 'underline' }}>
+              Görüntü yükle
+            </Link>
+          </p>
+        </motion.div>
+      )}
+
+      {/* No upload warning (non-demo, edge case) */}
+      {!uploadData && !isDemo && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-          style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px', background: 'rgba(212,87,76,0.06)', border: '1px solid rgba(212,87,76,0.2)', borderRadius: 'var(--r-md)', marginBottom: 24 }}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px',
+            background: 'rgba(212,87,76,0.06)', border: '1px solid rgba(212,87,76,0.2)',
+            borderRadius: 'var(--r-md)', marginBottom: 24,
+          }}
         >
           <AlertTriangle style={{ width: 16, height: 16, color: '#d4574c', flexShrink: 0 }} />
           <p style={{ fontSize: 13.5, color: 'var(--ink-2)' }}>
-            No specimen loaded. <Link to="/upload" style={{ color: 'var(--klein)', textDecoration: 'underline' }}>Return to Upload</Link> first.
+            No specimen loaded.{' '}
+            <Link to="/upload" style={{ color: 'var(--klein)', textDecoration: 'underline' }}>Return to Upload</Link> first.
           </p>
         </motion.div>
       )}
@@ -149,7 +192,7 @@ export function TransformPage() {
                     onClick={() => update('method', m)}
                     className={`sp-seg-btn ${settings.method === m ? 'sp-seg-btn-active' : ''}`}
                   >
-                    {m === 'jpeg' ? 'JPEG · DCT' : 'JPEG2000 · DWT'}
+                    {m === 'jpeg' ? 'JPEG · DCT' : 'J2K · DWT'}
                   </button>
                 ))}
               </div>
@@ -159,7 +202,12 @@ export function TransformPage() {
                 <motion.div
                   key={settings.method}
                   initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
-                  style={{ padding: '14px 16px', background: settings.method === 'jpeg2000' ? 'rgba(30,42,255,0.04)' : 'rgba(75,30,122,0.04)', border: `1px solid ${settings.method === 'jpeg2000' ? 'rgba(30,42,255,0.15)' : 'rgba(75,30,122,0.15)'}`, borderRadius: 'var(--r-sm)' }}
+                  style={{
+                    padding: '14px 16px',
+                    background: settings.method === 'jpeg2000' ? 'rgba(30,42,255,0.04)' : 'rgba(75,30,122,0.04)',
+                    border: `1px solid ${settings.method === 'jpeg2000' ? 'rgba(30,42,255,0.15)' : 'rgba(75,30,122,0.15)'}`,
+                    borderRadius: 'var(--r-sm)',
+                  }}
                 >
                   <div style={{ display: 'flex', gap: 10 }}>
                     {settings.method === 'jpeg2000'
@@ -200,84 +248,54 @@ export function TransformPage() {
                   </div>
 
                   <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 20 }}>
-                    {/* Wavelet Filter */}
+                    {/* Wavelet Filter — sp-pill butonlar */}
                     <div>
-                      <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.2em', color: 'var(--ink-3)', textTransform: 'uppercase', marginBottom: 10 }}>Wavelet Filter</label>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {(['haar', 'db2', 'db4'] as const).map(w => {
-                          const info = WAVELET_INFO[w];
-                          const isActive = settings.waveletFilter === w;
-                          return (
-                            <button
-                              key={w}
-                              onClick={() => update('waveletFilter', w)}
-                              style={{
-                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                padding: '12px 16px', borderRadius: 'var(--r-sm)',
-                                border: `1px solid ${isActive ? 'rgba(30,42,255,0.35)' : 'var(--rule)'}`,
-                                background: isActive ? 'rgba(30,42,255,0.04)' : 'white',
-                                cursor: 'pointer', transition: 'all 0.18s', textAlign: 'left',
-                              }}
-                            >
-                              <div>
-                                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: isActive ? 'var(--klein)' : 'var(--ink)', fontWeight: isActive ? 600 : 400, letterSpacing: '0.05em', marginBottom: 3 }}>
-                                  {info.full}
-                                </div>
-                                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--ink-4)', letterSpacing: '0.03em' }}>
-                                  {info.description}
-                                </div>
-                              </div>
-                              <span style={{
-                                fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.12em',
-                                textTransform: 'uppercase', padding: '3px 8px', borderRadius: 100,
-                                border: `1px solid ${isActive ? 'rgba(30,42,255,0.3)' : 'var(--rule)'}`,
-                                color: isActive ? 'var(--klein)' : 'var(--ink-4)',
-                                background: isActive ? 'rgba(30,42,255,0.06)' : 'transparent',
-                                flexShrink: 0, marginLeft: 10,
-                              }}>
-                                {info.quality}
-                              </span>
-                            </button>
-                          );
-                        })}
+                      <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.2em', color: 'var(--ink-3)', textTransform: 'uppercase', marginBottom: 10 }}>
+                        Wavelet Filter
+                      </label>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {(['haar', 'db2', 'db4'] as const).map(w => (
+                          <button
+                            key={w}
+                            onClick={() => update('waveletFilter', w)}
+                            className={`sp-pill ${settings.waveletFilter === w ? 'sp-pill-active' : ''}`}
+                          >
+                            {w}
+                          </button>
+                        ))}
                       </div>
+                      {/* Seçili wavelet açıklaması */}
+                      <AnimatePresence mode="wait">
+                        <motion.p
+                          key={settings.waveletFilter}
+                          initial={{ opacity: 0, y: 3 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                          style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--ink-4)', marginTop: 8, letterSpacing: '0.03em', lineHeight: 1.5 }}
+                        >
+                          {wavelet.description}
+                        </motion.p>
+                      </AnimatePresence>
                     </div>
 
-                    {/* Decomposition Level */}
+                    {/* Decomposition Level — sp-pill butonlar */}
                     <div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                        <label style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.2em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>Decomposition Level</label>
+                        <label style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.2em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>
+                          Decomposition Level
+                        </label>
                         <span style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 22, color: 'var(--klein)', lineHeight: 1, padding: '2px 10px', background: 'rgba(30,42,255,0.06)', borderRadius: 100 }}>
                           {settings.decompositionLevel}
                         </span>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <button
-                          onClick={() => update('decompositionLevel', Math.max(1, settings.decompositionLevel - 1))}
-                          style={{ width: 36, height: 36, borderRadius: 8, background: 'white', border: '1px solid var(--rule)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--ink-2)', transition: 'all 0.15s' }}
-                        ><ChevronDown style={{ width: 14, height: 14 }} /></button>
-
-                        <div style={{ flex: 1, display: 'flex', gap: 4, padding: 3, background: 'var(--paper-3)', borderRadius: 8, border: '1px solid var(--rule)' }}>
-                          {[1, 2, 3, 4, 5].map(n => (
-                            <button
-                              key={n}
-                              onClick={() => update('decompositionLevel', n)}
-                              style={{
-                                flex: 1, height: 30, borderRadius: 6,
-                                border: settings.decompositionLevel === n ? '1px solid rgba(30,42,255,0.3)' : 'none',
-                                background: settings.decompositionLevel === n ? 'white' : 'transparent',
-                                color: settings.decompositionLevel === n ? 'var(--klein)' : 'var(--ink-3)',
-                                fontFamily: 'var(--font-mono)', fontSize: 12, cursor: 'pointer', transition: 'all 0.2s',
-                                fontWeight: settings.decompositionLevel === n ? 600 : 400,
-                              }}
-                            >{n}</button>
-                          ))}
-                        </div>
-
-                        <button
-                          onClick={() => update('decompositionLevel', Math.min(5, settings.decompositionLevel + 1))}
-                          style={{ width: 36, height: 36, borderRadius: 8, background: 'white', border: '1px solid var(--rule)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--ink-2)', transition: 'all 0.15s' }}
-                        ><ChevronUp style={{ width: 14, height: 14 }} /></button>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {[1, 2, 3, 4, 5].map(n => (
+                          <button
+                            key={n}
+                            onClick={() => update('decompositionLevel', n)}
+                            className={`sp-pill ${settings.decompositionLevel === n ? 'sp-pill-active' : ''}`}
+                          >
+                            {n}
+                          </button>
+                        ))}
                       </div>
                       <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--ink-4)', marginTop: 8, letterSpacing: '0.04em' }}>
                         Higher levels → more subbands → better energy compaction. Recommended: 3–4 for natural images.
@@ -289,22 +307,41 @@ export function TransformPage() {
             )}
           </AnimatePresence>
 
+          {/* ── Seçim Özet Kartı ── */}
+          <div className="sp-card" style={{ padding: '16px 20px' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.2em', color: 'var(--ink-3)', textTransform: 'uppercase', marginBottom: 12 }}>
+              Seçim Özeti
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[
+                { label: 'Yöntem', value: settings.method === 'jpeg' ? 'JPEG (DCT)' : 'JPEG 2000 (DWT)' },
+                ...(settings.method === 'jpeg2000' ? [
+                  { label: 'Wavelet Filtre', value: WAVELET_INFO[settings.waveletFilter]?.full ?? settings.waveletFilter },
+                  { label: 'Ayrışım Seviyesi', value: `Level ${settings.decompositionLevel}` },
+                  { label: 'Subband Sayısı', value: `${3 * settings.decompositionLevel + 1} subband` },
+                ] : [
+                  { label: 'Blok Boyutu', value: '8 × 8 px' },
+                  { label: 'Bazis Fonksiyonları', value: '64 cosine' },
+                ]),
+              ].map(row => (
+                <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 7, borderBottom: '1px solid var(--rule-soft)' }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>
+                    {row.label}
+                  </span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--ink)', fontWeight: 500 }}>
+                    {row.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Navigation */}
           <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
             <button onClick={handleBack} className="sp-btn sp-btn-ghost" style={{ flex: 1, justifyContent: 'center' }}>
               ← Upload
             </button>
-            <button
-              onClick={handleNext}
-              style={{
-                flex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                background: 'var(--klein)', color: 'white',
-                padding: '13px 20px', borderRadius: 100, border: 'none', cursor: 'pointer',
-                fontFamily: 'var(--font-sans)', fontSize: 13.5, fontWeight: 500,
-                boxShadow: '0 4px 16px -4px rgba(30,42,255,0.4)',
-                transition: 'all 0.22s',
-              }}
-            >
+            <button onClick={handleNext} className="sp-btn sp-btn-klein" style={{ flex: 2, justifyContent: 'center', gap: 8 }}>
               Next: Quantize
               <ArrowRight style={{ width: 14, height: 14 }} />
             </button>
@@ -316,11 +353,27 @@ export function TransformPage() {
           {/* Specimen context */}
           {uploadData && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'var(--paper-2)', border: '1px solid var(--rule)', borderRadius: 'var(--r-md)' }}>
-              <img src={uploadData.dataUrl} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--rule)', flexShrink: 0 }} />
+              {uploadData.dataUrl
+                ? <img src={uploadData.dataUrl} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--rule)', flexShrink: 0 }} />
+                : <div style={{ width: 48, height: 48, borderRadius: 6, background: 'var(--paper-3)', border: '1px solid var(--rule)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--ink-4)', textTransform: 'uppercase' }}>Demo</span>
+                  </div>
+              }
               <div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.12em', color: 'var(--ink-3)', textTransform: 'uppercase', marginBottom: 3 }}>Active Specimen</div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 260 }}>{uploadData.name}</div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--ink-4)', marginTop: 2 }}>{uploadData.resolution} · {uploadData.sizeKB} KB</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.12em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>Active Specimen</div>
+                  {isDemo && (
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 100, background: 'var(--cyan)', color: 'var(--paper)', fontWeight: 600 }}>
+                      Demo
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 260 }}>
+                  {uploadData.name}
+                </div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--ink-4)', marginTop: 2 }}>
+                  {uploadData.resolution} · {uploadData.sizeKB} KB
+                </div>
               </div>
             </div>
           )}
@@ -340,10 +393,17 @@ export function TransformPage() {
                   </span>
                 </div>
                 <div style={{ padding: 20 }}>
-                  <DWTSubbandsViz
-                    level={settings.decompositionLevel}
-                    active={true}
-                  />
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={`${settings.decompositionLevel}-${settings.waveletFilter}`}
+                      initial={{ opacity: 0, scale: 0.96 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.25 }}
+                    >
+                      <DWTSubbandsViz level={settings.decompositionLevel} active={true} />
+                    </motion.div>
+                  </AnimatePresence>
                 </div>
               </motion.div>
             ) : (
@@ -356,7 +416,6 @@ export function TransformPage() {
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.22em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>DCT BLOCK STRUCTURE</span>
                 </div>
                 <div style={{ padding: 24 }}>
-                  {/* 8x8 block grid illustration */}
                   <div style={{ marginBottom: 20 }}>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 3, maxWidth: 240, margin: '0 auto 16px' }}>
                       {Array.from({ length: 36 }).map((_, i) => (
