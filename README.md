@@ -21,9 +21,18 @@ npm run dev
 
 Tarayıcıda: `http://localhost:3000`
 
-## StackBlitz'te Açma
+## GitHub Codespaces ile Açma (Tavsiye Edilen)
 
-Projeyi StackBlitz'e yükleyip **Share → Invite collaborators** ile tüm takıma link gönder.
+1. Bu repo'ya git → üstten kendi **branch'ini** seç
+2. Yeşil **`<> Code`** butonu → **Codespaces** sekmesi → **Create codespace on [branch adı]**
+3. Tarayıcıda VS Code açılır, terminale yaz:
+```bash
+npm install
+npm run dev
+```
+4. Açılan port linkine tıkla → canlı önizleme hazır
+
+> Ücretsiz · Ayda 60 saat · Kurulum gerektirmez
 
 ## Kurallar
 
