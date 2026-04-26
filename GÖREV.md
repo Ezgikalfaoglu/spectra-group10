@@ -1,131 +1,163 @@
-Hata sebebi Git conflict işaretleri kalmış:
+# 👋 Azra — Senin Branch'in: `feature/results-azra`
 
-`<<<<<<<` `=======` `>>>>>>>`
+## GitHub Codespaces ile Aç (Tavsiye Edilen — kurulum gerektirmez)
 
-Bunları silip aşağıdaki temiz halini kullan: 
-
-````md
-# 👋 Ayşe Berfin — Senin Branch'in: `feature/quantization-berfin`
-
-## GitHub Codespaces ile Aç
-
-1. `github.com/Ezgikalfaoglu/spectra-group10` → branch olarak **`feature/quantization-berfin`** seç
-2. Yeşil **`<> Code`** butonu → **Codespaces** sekmesi → **Create codespace on feature/quantization-berfin**
-3. Terminale yaz:
-
+1. `github.com/Ezgikalfaoglu/spectra-group10` → branch olarak **`feature/results-azra`** seç
+2. Yeşil **`<> Code`** butonu → **Codespaces** sekmesi → **Create codespace on feature/results-azra**
+3. Tarayıcıda VS Code açılır, terminale yaz:
 ```bash
 npm install
 npm run dev
-````
+```
+4. Açılan port linkine tıkla → `/results`, `/history`, `/dashboard` canlı görünür
 
-4. Açılan port linkine tıkla → `http://localhost:3000/quantization` canlı görünür
-
-## Yerel Çalıştırma
-
+## Yerel Çalıştırma (isteğe bağlı)
 ```bash
 git clone https://github.com/Ezgikalfaoglu/spectra-group10.git
 cd spectra-group10
-git checkout feature/quantization-berfin
+git checkout feature/results-azra
 npm install
 npm run dev
+# Sayfaların: /results  /history  /dashboard
 ```
-
-Tarayıcı: `http://localhost:3000/quantization`
 
 ---
 
-## Senin Dosyan
-
-```txt
-src/app/pages/QuantizationPage.tsx
+## Senin Dosyaların (3 sayfa)
 ```
-
-Sadece bu dosyaya dokunuyorsun.
-
-## Yapman Gerekenler
-
-### 1. Quantization Tipi Seçici
-
-* İki seçenek yan yana: **Uniform** | **Scalar**
-* `sp-seg`, `sp-seg-btn`, `sp-seg-btn-active` class'larını kullan
-
-### 2. Step Size Slider
-
-* Aralık: **1 – 64**
-* Sürüklerken sağda anlık değer göster
-* Değer değiştikçe tahmini PSNR ve CR canlı güncellenir
-
-```js
-const estPSNR = Math.max(20, 42 - stepSize * 0.35).toFixed(1)
-const estCR = (1 + stepSize * 0.14).toFixed(1) + ":1"
+src/app/pages/ResultsPage.tsx     ← Sonuçlar
+src/app/pages/HistoryPage.tsx     ← Geçmiş
+src/app/pages/DashboardPage.tsx   ← Ana çalışma alanı
 ```
-
-### 3. Lossless Toggle
-
-```tsx
-import { Switch } from '@/components/ui/switch'
-```
-
-Toggle açıkken:
-
-* Slider ve tip seçici disabled olur
-* Lock ikonu + **Kayıpsız mod aktif** banner gösterilir
-* PSNR → `∞ dB`
-* CR → `1:1`
-
-### 4. Canlı Kalite Tahmin Kartı
-
-Büyük sayılarla `font-serif italic`:
-
-* PSNR > 35 dB → yeşil
-* 28–35 dB → amber/turuncu
-* < 28 dB → kırmızı
-* CR değeri gösterilir
-
-### 5. Açıklama Alanı
-
-```tsx
-import {
-  Collapsible,
-  CollapsibleTrigger,
-  CollapsibleContent
-} from '@/components/ui/collapsible'
-```
-
-Başlık: **Bu Ayarlar Ne Anlama Gelir?**
-
-Kısa açıklama: Step size arttıkça sıkıştırma artar ama kalite düşebilir.
-
-### 6. Navigasyon
-
-* Geri: `/transform`
-* İleri: `/processing`
-* İleri gitmeden önce şunu kaydet:
-
-```js
-localStorage.setItem("spectra_quantization", JSON.stringify({
-  quantizationType: "scalar",
-  stepSize: 18,
-  lossless: false
-}))
-```
-
-### 7. Demo Modu
-
-`localStorage["spectra_transform"]` boşsa varsayılan değerlerle başlat.
 
 ---
+
+## ResultsPage (`/results`)
+
+### 1. ComparisonSlider — Görüntü Karşılaştırıcı
+```tsx
+import { ComparisonSlider } from '../components/ComparisonSlider';
+```
+- Sol: orijinal görüntü · Sağ: sıkıştırılmış görüntü
+- Sürüklenebilir beyaz çizgi ortada
+- 3 mod butonu: **REVEAL** | **SPLIT** | **LENS**
+
+### 2. Metrik Kartları
+MSE · PSNR · CR · Sparsity için 4 kart:
+- Büyük `font-serif italic` sayı
+- Alt satırda delta badge: JPEG'e göre fark (↑ yeşil, ↓ kırmızı)
+- Ince progress bar (`var(--klein)` rengi)
+
+### 3. InsightCard
+```tsx
+import { InsightCard } from '../components/InsightCard';
+```
+`var(--ink)` arka plan, `var(--cyan)` aksan — `lastResult` verisine göre içerik üret
+
+### 4. Grafikler (recharts)
+```tsx
+import { LineChart, BarChart, RadarChart, ... } from 'recharts';
+```
+- **LineChart:** PSNR vs Step Size eğrisi
+- **BarChart:** JPEG ↔ JPEG2000 CR karşılaştırması
+- **RadarChart:** 4 metriği tek radar'da göster
+
+### 5. JSON İndir Butonu
+```js
+const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' })
+const url = URL.createObjectURL(blob)
+// <a href={url} download="spectra-result.json">
+```
+
+### 6. Demo Modu
+`lastResult` boşsa `DEMO_RESULT` sabit verisiyle çalış (dosyada zaten var)
+
+---
+
+## HistoryPage (`/history`)
+
+### 1. Benchmark Tablosu
+`compressionHistory` dizisini tablo olarak göster:
+
+| Tarih | Görüntü | Metot | PSNR | CR | Sparsity | |
+|---|---|---|---|---|---|---|
+| 21 Nis | gorsel.jpg | JPEG2000 | 31.82 dB | 10.4:1 | 78% | [Aç] [Sil] |
+
+### 2. Satır Genişletme
+```tsx
+import { Collapsible, CollapsibleTrigger, CollapsibleContent }
+  from '@/components/ui/collapsible'
+```
+Tıklayınca mini grafik + tam parametre özeti açılır
+
+### 3. Filtre & Sıralama
+- Metot filtresi: "Tümü | JPEG | JPEG2000" (`sp-seg`)
+- PSNR'a göre büyükten küçüğe sıralama
+
+### 4. Sil Butonu
+- Çöp kutusu ikonuna tıklayınca satır slide-out animasyonuyla kaybolur
+- `localStorage["compressionHistory"]` güncellenir
+
+### 5. Boş Durum
+Geçmiş yoksa:
+```
+font-serif italic büyük: "Henüz kayıt yok."
+sp-btn sp-btn-klein: "Workspace'i Aç" → /dashboard
+```
+
+---
+
+## DashboardPage (`/dashboard`)
+
+### 1. 3 Kolon Layout
+```
+[Sol Rail 300px] [Orta Stage flex] [Sağ Observation 290px]
+```
+LandingPage'deki mock'u gerçek state'e bağla — bu sayfa tüm akışı tek ekranda barındırır.
+
+### 2. Sol Rail
+- Görsel yükleme alanı (mini upload zone)
+- Metot seçici (`sp-seg`)
+- Step size slider
+- "Run" butonu (`sp-btn sp-btn-klein`)
+
+### 3. Orta Stage
+- Pipeline stepper (7 aşama) — `PipelineStepper` bileşeni
+- `ComparisonSlider` — görüntü karşılaştırıcı
+
+### 4. Sağ Observation
+- 4 metrik (`sp-metric-item` stiliyle), sayaç animasyonu
+- `InsightCard` bileşeni
+- Son 3 çalıştırma mini kartı (geçmiş özeti)
+
+### 5. Run Butonu Akışı
+- Tıklayınca: disabled + shimmer
+- İşlem tamamlanınca: yeşil "Done" + `/results`'a link
+
+---
+
+## Renk & Stil Referansı
+```css
+var(--klein)      /* grafik rengi, seçili state */
+var(--cyan)       /* InsightCard aksan, canlı state */
+var(--leaf)       /* pozitif delta, yeşil */
+var(--paper-2)    /* kart arka planı */
+var(--font-serif) /* büyük metrik sayıları */
+var(--font-mono)  /* label, tarih, değer */
+```
 
 ## Commit & Push
-
 ```bash
-git add src/app/pages/QuantizationPage.tsx
-git commit -m "feat(quantization): step size slider ve canlı PSNR tahmini"
+# Her sayfa için ayrı commit atabilirsin
+git add src/app/pages/ResultsPage.tsx
+git commit -m "feat(results): comparison slider ve metrik kartları"
+
+git add src/app/pages/HistoryPage.tsx
+git commit -m "feat(history): benchmark tablosu ve filtreler"
+
+git add src/app/pages/DashboardPage.tsx
+git commit -m "feat(dashboard): 3 kolon layout ve run akışı"
+
 git push
 ```
-
-Bitince GitHub'da Pull Request aç.
-
-```
-```
-
+Bitince GitHub'da **Pull Request** aç → Ezgi review yapar.

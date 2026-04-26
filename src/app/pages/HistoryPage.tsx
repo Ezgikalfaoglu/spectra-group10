@@ -6,6 +6,10 @@ import {
   Eye, Trash2, BarChart3, Clock, Database, RefreshCw,
   ArrowUpDown, Activity
 } from 'lucide-react';
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid,
+  ResponsiveContainer
+} from 'recharts';
 
 interface RunRecord {
   id: string; date: string; imageName: string;
@@ -38,10 +42,10 @@ export function HistoryPage() {
   const [rows, setRows] = useState<RunRecord[]>([]);
   const [search, setSearch] = useState('');
   const [methodFilter, setMethodFilter] = useState('all');
-  const [sortKey, setSortKey] = useState<SortKey>('date');
+  const [sortKey, setSortKey] = useState<SortKey>('psnr');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
-
+  
   useEffect(() => {
     const stored = localStorage.getItem('compressionHistory');
     let history: RunRecord[] = [];
@@ -62,6 +66,11 @@ export function HistoryPage() {
       return true;
     })
     .sort((a, b) => {
+      if (sortKey === 'psnr') {
+        return sortDir === 'asc'
+          ? a.psnr - b.psnr
+          : b.psnr - a.psnr;
+      }
       const va = a[sortKey]; const vb = b[sortKey];
       const cmp = String(va).localeCompare(String(vb), undefined, { numeric: true });
       return sortDir === 'asc' ? cmp : -cmp;
@@ -105,7 +114,32 @@ export function HistoryPage() {
             <RefreshCw style={{ width: 12, height: 12 }} />
             New Run
           </Link>
-          <button className="sp-btn sp-btn-ghost sp-btn-sm">
+          <button className="sp-btn sp-btn-ghost sp-btn-sm" onClick={() => {
+            const csv = [
+              ['Run ID', 'Date', 'Specimen', 'Method', 'Wavelet', 'Level', 'Quant', 'Step', 'MSE', 'PSNR', 'CR', 'Sparsity'].join(','),
+              ...filtered.map(r => [
+                r.id,
+                formatDate(r.date),
+                r.imageName,
+                r.method,
+                r.wavelet,
+                r.decompLevel,
+                r.quantType,
+                r.stepSize,
+                r.mse.toFixed(2),
+                r.psnr.toFixed(2),
+                r.cr,
+                r.sparsity
+              ].map(v => `"${v}"`).join(','))
+            ].join('\n');
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `compression-history-${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+          }}>
             <Download style={{ width: 12, height: 12 }} />
             Export CSV
           </button>
@@ -178,6 +212,7 @@ export function HistoryPage() {
                   { key: 'mse', label: 'MSE' },
                   { key: 'psnr', label: 'PSNR' },
                   { key: 'cr', label: 'CR' },
+                  { key: 'sparsity', label: 'Sparsity' },
                 ].map(({ key, label }) => (
                   <th key={key} style={{ padding: '11px 16px', textAlign: 'left', fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.2em', color: 'var(--ink-3)', textTransform: 'uppercase', whiteSpace: 'nowrap', fontWeight: 400 }}>
                     {label}<SortBtn col={key as SortKey} />
@@ -186,22 +221,46 @@ export function HistoryPage() {
                 <th style={{ padding: '11px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.2em', color: 'var(--ink-3)', textTransform: 'uppercase', fontWeight: 400 }}>Actions</th>
               </tr>
             </thead>
-            <tbody>
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={12} style={{ textAlign: 'center', padding: '64px 20px' }}>
-                    <Database style={{ width: 32, height: 32, color: 'var(--ink-4)', margin: '0 auto 12px' }} />
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.15em', color: 'var(--ink-4)', textTransform: 'uppercase' }}>No matching records</div>
-                  </td>
-                </tr>
-              )}
-              {filtered.map((row, idx) => (
-                <Fragment key={row.id}>
-                  <tr
-                    style={{ borderBottom: '1px solid var(--rule-soft)', background: expandedRow === row.id ? 'rgba(30,42,255,0.03)' : idx % 2 === 1 ? 'var(--paper-2)' : 'white', cursor: 'pointer', transition: 'background 0.15s' }}
-                    onClick={() => setExpandedRow(expandedRow === row.id ? null : row.id)}
-                  >
-                    <td style={{ padding: '12px 16px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--klein)', letterSpacing: '0.05em' }}>{row.id}</td>
+<tbody>
+  {filtered.length === 0 && (
+    <tr>
+      <td colSpan={13} style={{ textAlign: 'center', padding: '64px 20px' }}>
+        
+        <Database style={{ width: 32, height: 32, marginBottom: 12, opacity: 0.5 }} />
+
+        <div style={{
+          fontFamily: 'var(--font-serif)',
+          fontStyle: 'italic',
+          fontSize: 22,
+          marginBottom: 16,
+          color: 'var(--ink)'
+        }}>
+          Henüz kayıt yok.
+        </div>
+
+        <Link
+          to="/dashboard"
+          className="sp-btn sp-btn-klein"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+        >
+          Workspace'i Aç
+        </Link>
+
+      </td>
+    </tr>
+  )}
+  {filtered.map((row, idx) => (
+    <Fragment key={row.id}>
+      <tr
+        onClick={() => setExpandedRow(expandedRow === row.id ? null : row.id)}
+        style={{
+          borderBottom: '1px solid var(--rule-soft)',
+          background: idx % 2 === 1 ? 'var(--paper-2)' : 'white',
+          cursor: 'pointer',
+          transition: 'background 0.15s'
+        }}
+      >
+        <td style={{ padding: '12px 16px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--klein)', letterSpacing: '0.05em' }}>{row.id}</td>
                     <td style={{ padding: '12px 16px', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--ink-3)', whiteSpace: 'nowrap' }}>{formatDate(row.date)}</td>
                     <td style={{ padding: '12px 16px', fontSize: 12.5, color: 'var(--ink)', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.imageName}</td>
                     <td style={{ padding: '12px 16px' }}>
@@ -223,13 +282,19 @@ export function HistoryPage() {
                       </div>
                     </td>
                     <td style={{ padding: '12px 16px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--ink)' }}>{row.cr}</td>
+                    <td style={{ padding: '12px 16px', fontFamily: 'var(--font-mono)', fontSize: 11, color: parseFloat(row.sparsity) > 75 ? '#d4574c' : parseFloat(row.sparsity) > 50 ? 'var(--amber)' : 'var(--leaf)' }}>{row.sparsity}</td>
                     <td style={{ padding: '12px 16px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
                         <Link to="/results" onClick={e => e.stopPropagation()}
                           style={{ width: 28, height: 28, borderRadius: 6, background: 'white', border: '1px solid var(--rule)', color: 'var(--ink-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', textDecoration: 'none' }}>
                           <Eye style={{ width: 13, height: 13 }} />
                         </Link>
-                        <button onClick={e => { e.stopPropagation(); setRows(r => r.filter(x => x.id !== row.id)); }}
+                        <button onClick={e => { 
+                          e.stopPropagation(); 
+                          const newRows = rows.filter(x => x.id !== row.id);
+                          setRows(newRows);
+                          localStorage.setItem("compressionHistory", JSON.stringify(newRows));
+                        }}
                           style={{ width: 28, height: 28, borderRadius: 6, background: 'white', border: '1px solid var(--rule)', color: 'var(--ink-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.15s' }}>
                           <Trash2 style={{ width: 13, height: 13 }} />
                         </button>
@@ -241,7 +306,7 @@ export function HistoryPage() {
                   <AnimatePresence>
                     {expandedRow === row.id && (
                       <motion.tr initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ background: 'rgba(30,42,255,0.02)', borderBottom: '1px solid var(--rule)' }}>
-                        <td colSpan={12} style={{ padding: '20px 24px' }}>
+                        <td colSpan={13} style={{ padding: '20px 24px' }}>
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, background: 'white', borderRadius: 'var(--r-md)', padding: '20px 24px', border: '1px solid var(--rule)' }}>
                             {/* Config */}
                             <div>
@@ -280,6 +345,48 @@ export function HistoryPage() {
                                     <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--klein)' }}>{v}</span>
                                   </div>
                                 ))}
+                              </div>
+
+                              <div style={{ marginTop: 16 }}>
+                                <ResponsiveContainer width="100%" height={180}>
+                                  <LineChart
+                                    data={[
+                                      { step: Math.max(2, row.stepSize - 8), psnr: row.psnr - 2 },
+                                      { step: Math.max(2, row.stepSize - 4), psnr: row.psnr - 1 },
+                                      { step: row.stepSize, psnr: row.psnr },
+                                      { step: row.stepSize + 4, psnr: row.psnr - 0.8 },
+                                      { step: row.stepSize + 8, psnr: row.psnr - 1.6 },
+                                    ]}
+                                  >
+                                    <CartesianGrid stroke="var(--rule)" strokeDasharray="3 3" vertical={false} />
+                                    <XAxis
+                                      dataKey="step"
+                                      axisLine={false}
+                                      tickLine={false}
+                                      tick={{ fontSize: 10, fill: 'var(--ink-3)', fontFamily: 'var(--font-mono)' }}
+                                      label={{ value: 'Step Size', position: 'insideBottom', offset: -4, fill: 'var(--ink-4)', fontSize: 10, fontFamily: 'var(--font-mono)' }}
+                                    />
+                                    <YAxis
+                                      axisLine={false}
+                                      tickLine={false}
+                                      tick={{ fontSize: 10, fill: 'var(--ink-3)', fontFamily: 'var(--font-mono)' }}
+                                      label={{ value: 'PSNR (dB)', angle: -90, position: 'insideLeft', fill: 'var(--ink-4)', fontSize: 10, fontFamily: 'var(--font-mono)' }}
+                                      width={38}
+                                    />
+                                    <Tooltip
+                                      cursor={{ stroke: 'rgba(30,42,255,0.15)', strokeWidth: 1 }}
+                                      contentStyle={{ backgroundColor: 'var(--paper-2)', border: '1px solid var(--rule)', borderRadius: 10, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--ink)' }}
+                                    />
+                                    <Line
+                                      type="monotone"
+                                      dataKey="psnr"
+                                      stroke="var(--klein)"
+                                      strokeWidth={2.5}
+                                      dot={{ r: 3, fill: 'var(--klein)' }}
+                                      activeDot={{ r: 5, fill: 'var(--klein)' }}
+                                    />
+                                  </LineChart>
+                                </ResponsiveContainer>
                               </div>
                             </div>
                             {/* Specimen */}
