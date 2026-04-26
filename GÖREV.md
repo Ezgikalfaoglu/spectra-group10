@@ -1,97 +1,131 @@
-# 👋 Gül Deniz — Senin Branch'in: `feature/upload-guldeniz`
+Hata sebebi Git conflict işaretleri kalmış:
 
-## GitHub Codespaces ile Aç (Tavsiye Edilen — kurulum gerektirmez)
+`<<<<<<<` `=======` `>>>>>>>`
 
-1. `github.com/Ezgikalfaoglu/spectra-group10` → branch olarak **`feature/upload-guldeniz`** seç
-2. Yeşil **`<> Code`** butonu → **Codespaces** sekmesi → **Create codespace on feature/upload-guldeniz**
-3. Tarayıcıda VS Code açılır, terminale yaz:
+Bunları silip aşağıdaki temiz halini kullan: 
+
+````md
+# 👋 Ayşe Berfin — Senin Branch'in: `feature/quantization-berfin`
+
+## GitHub Codespaces ile Aç
+
+1. `github.com/Ezgikalfaoglu/spectra-group10` → branch olarak **`feature/quantization-berfin`** seç
+2. Yeşil **`<> Code`** butonu → **Codespaces** sekmesi → **Create codespace on feature/quantization-berfin**
+3. Terminale yaz:
+
 ```bash
 npm install
 npm run dev
-```
-4. Açılan port linkine tıkla → `http://localhost:3000/upload` canlı görünür
+````
 
-## Yerel Çalıştırma (isteğe bağlı)
+4. Açılan port linkine tıkla → `http://localhost:3000/quantization` canlı görünür
+
+## Yerel Çalıştırma
+
 ```bash
 git clone https://github.com/Ezgikalfaoglu/spectra-group10.git
 cd spectra-group10
-git checkout feature/upload-guldeniz
+git checkout feature/quantization-berfin
 npm install
 npm run dev
-# Tarayıcı: http://localhost:3000/upload
 ```
+
+Tarayıcı: `http://localhost:3000/quantization`
 
 ---
 
 ## Senin Dosyan
+
+```txt
+src/app/pages/QuantizationPage.tsx
 ```
-src/app/pages/UploadPage.tsx   ← SADECE BU DOSYAYA DOKUNUYORSUN
-```
+
+Sadece bu dosyaya dokunuyorsun.
 
 ## Yapman Gerekenler
 
-### 1. Drop Zone
-- Büyük sürükle-bırak kutusu: `border: 2px dashed var(--rule)`
-- Fare üzerine gelince: `border-color: var(--klein)` + hafif mavi arka plan
-- Dosya sürüklenince: kutu büyür (`scale(1.01)`), animasyonlu geçiş
+### 1. Quantization Tipi Seçici
 
-### 2. Dosya Önizleme
-- Yüklenen görsel thumbnail olarak göster
-- Sağ üst köşede **X butonu** → tıklayınca görüntü kaldırılır, drop zone geri gelir
+* İki seçenek yan yana: **Uniform** | **Scalar**
+* `sp-seg`, `sp-seg-btn`, `sp-seg-btn-active` class'larını kullan
 
-### 3. Metadata Kartı
-Görüntü yüklenince şu bilgileri kart içinde göster (`font-mono` ile):
-- Çözünürlük (örn. 1024 × 1024)
-- Dosya boyutu (örn. 2.4 MB)
-- Renk modu (RGB / Grayscale)
-- Format (PNG / JPG / TIFF / BMP)
+### 2. Step Size Slider
 
-### 4. Görüntü Türü Seçici
-4 seçenekli radio buton grubu:
-- `Natural` · `Synthetic` · `Fingerprint` · `Biomedical`
-- Seçili olan: klein mavi border + hafif mavi arka plan
+* Aralık: **1 – 64**
+* Sürüklerken sağda anlık değer göster
+* Değer değiştikçe tahmini PSNR ve CR canlı güncellenir
 
-### 5. Hata Durumu
-- Geçersiz format yüklenince kırmızı border + uyarı mesajı
-- Kutu hafifçe salla (`shake` animasyonu)
-
-### 6. İleri Butonu
-- `sp-btn sp-btn-klein` stil → `/transform` sayfasına yönlendirir
-- localStorage boşsa buton `disabled` + "Önce görsel yükle" tooltip
-
-### 7. Demo Modu
-- Sayfa açıldığında localStorage boşsa **örnek görsel + metadata** otomatik doldur
-- Kullanıcıya "Demo modunda çalışıyor" küçük badge göster
-
----
-
-## Renk & Stil Referansı
-```css
-var(--klein)    /* #1E2AFF — mavi, seçili state */
-var(--paper-2)  /* #FAF8F1 — kart arka planı */
-var(--rule)     /* hairline border rengi */
-var(--ink)      /* #0A0B0E — ana metin */
-var(--ink-3)    /* açık gri — label metni */
-var(--font-mono) /* JetBrains Mono — sayılar */
+```js
+const estPSNR = Math.max(20, 42 - stepSize * 0.35).toFixed(1)
+const estCR = (1 + stepSize * 0.14).toFixed(1) + ":1"
 ```
 
-## localStorage Çıktın
+### 3. Lossless Toggle
+
+```tsx
+import { Switch } from '@/components/ui/switch'
+```
+
+Toggle açıkken:
+
+* Slider ve tip seçici disabled olur
+* Lock ikonu + **Kayıpsız mod aktif** banner gösterilir
+* PSNR → `∞ dB`
+* CR → `1:1`
+
+### 4. Canlı Kalite Tahmin Kartı
+
+Büyük sayılarla `font-serif italic`:
+
+* PSNR > 35 dB → yeşil
+* 28–35 dB → amber/turuncu
+* < 28 dB → kırmızı
+* CR değeri gösterilir
+
+### 5. Açıklama Alanı
+
+```tsx
+import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent
+} from '@/components/ui/collapsible'
+```
+
+Başlık: **Bu Ayarlar Ne Anlama Gelir?**
+
+Kısa açıklama: Step size arttıkça sıkıştırma artar ama kalite düşebilir.
+
+### 6. Navigasyon
+
+* Geri: `/transform`
+* İleri: `/processing`
+* İleri gitmeden önce şunu kaydet:
+
 ```js
-localStorage.setItem("spectra_upload", JSON.stringify({
-  name: "gorsel.jpg",
-  format: "JPEG",
-  resolution: "1024x1024",
-  colorMode: "RGB",
-  sizeKB: 2400,
-  dataUrl: "...",
-  imageType: "Natural"
+localStorage.setItem("spectra_quantization", JSON.stringify({
+  quantizationType: "scalar",
+  stepSize: 18,
+  lossless: false
 }))
 ```
 
+### 7. Demo Modu
+
+`localStorage["spectra_transform"]` boşsa varsayılan değerlerle başlat.
+
+---
+
 ## Commit & Push
+
 ```bash
-git add src/app/pages/UploadPage.tsx
-git commit -m "feat(upload): drop zone ve metadata kartı"
+git add src/app/pages/QuantizationPage.tsx
+git commit -m "feat(quantization): step size slider ve canlı PSNR tahmini"
 git push
 ```
-Bitince GitHub'da **Pull Request** aç → Ezgi review yapar.
+
+Bitince GitHub'da Pull Request aç.
+
+```
+```
+
