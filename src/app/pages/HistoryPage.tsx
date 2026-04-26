@@ -235,7 +235,7 @@ export function HistoryPage() {
           marginBottom: 16,
           color: 'var(--ink)'
         }}>
-          Henüz kayıt yok.
+          No records yet.
         </div>
 
         <Link
@@ -243,7 +243,7 @@ export function HistoryPage() {
           className="sp-btn sp-btn-klein"
           style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
         >
-          Workspace'i Aç
+          Open Workspace
         </Link>
 
       </td>

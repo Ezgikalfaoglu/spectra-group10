@@ -33,7 +33,7 @@ const PIPELINE_STAGES = [
   { id: 6, label: 'Evaluation',           icon: Activity,          desc: 'Computing MSE, PSNR, Compression Ratio, Sparsity' },
 ];
 
-const STEP_DURATION = 800; // Görev 7: Her aşama 800ms
+const STEP_DURATION = 800; // 800ms per stage
 
 /* ─── Compute results helper ─── */
 function computeResults(t: TransformSettings, q: QuantizationSettings): Results {
@@ -103,11 +103,12 @@ export function ProcessingPage() {
             setIsRunning(false);
             setIsDone(true);
 
-            // Görev 5: LocalStorage Çıktısı
+            // Persist result for Results / History pages
             const resultEntry = {
               id: Date.now().toString(),
               date: new Date().toISOString(),
               imageName: upload.name,
+              imageDataUrl: upload.dataUrl,
               method: transform.method.toUpperCase(),
               wavelet: transform.waveletFilter || "db4",
               decompLevel: transform.decompositionLevel,
@@ -128,7 +129,7 @@ export function ProcessingPage() {
     });
   }, [upload, transform, quant]);
 
-  // Görev 5: Geri sayım ve yönlendirme
+  // Countdown + auto-redirect to results
   useEffect(() => {
     if (isDone && countdown > 0) {
       const timer = setInterval(() => setCountdown(c => c - 1), 1000);
@@ -144,13 +145,13 @@ export function ProcessingPage() {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 24px' }}>
       <PipelineStepper />
 
-      {/* Görev 6: Hata Durumu */}
+      {/* Missing config error state */}
       {missingStep && (
         <div className="sp-card" style={{ padding: 24, border: '1px solid var(--leaf)', textAlign: 'center' }}>
           <AlertTriangle className="text-red-500 mx-auto mb-4" size={48} />
           <h2 style={{ fontFamily: 'var(--font-serif)' }}>Missing Configuration</h2>
           <p>{missingStep}</p>
-          <button onClick={() => navigate('/')} className="sp-btn sp-btn-ghost mt-4">Tekrar Dene</button>
+          <button onClick={() => navigate('/')} className="sp-btn sp-btn-ghost mt-4">Try again</button>
         </div>
       )}
 
@@ -170,18 +171,111 @@ export function ProcessingPage() {
                 </div>
             </div>
 
-            <div className="space-y-4">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, position: 'relative' }}>
               {PIPELINE_STAGES.map((stage, idx) => {
                 const isCompleted = currentStep > idx || isDone;
                 const isActive = currentStep === idx && isRunning;
+                const StageIcon = stage.icon;
+                const isLast = idx === PIPELINE_STAGES.length - 1;
                 return (
-                  <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 16, opacity: isCompleted || isActive ? 1 : 0.4 }}>
-                    <div className={isCompleted ? 'sp-pstep-dot-done' : isActive ? 'sp-pstep-dot-active' : 'sp-pstep-dot'}>
-                      {isCompleted ? <CheckCircle2 size={16} /> : idx + 1}
+                  <div
+                    key={idx}
+                    style={{
+                      position: 'relative',
+                      display: 'grid',
+                      gridTemplateColumns: '36px 1fr',
+                      gap: 14,
+                      padding: '10px 0',
+                      alignItems: 'center',
+                    }}
+                  >
+                    {/* Connector line */}
+                    {!isLast && (
+                      <span
+                        style={{
+                          position: 'absolute',
+                          left: 17,
+                          top: 38,
+                          bottom: -4,
+                          width: 2,
+                          background: isCompleted ? 'var(--klein)' : 'var(--rule)',
+                          transition: 'background 0.4s',
+                          zIndex: 0,
+                        }}
+                      />
+                    )}
+
+                    {/* Step indicator */}
+                    <div
+                      style={{
+                        position: 'relative',
+                        zIndex: 1,
+                        width: 36,
+                        height: 36,
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: isCompleted
+                          ? 'var(--klein)'
+                          : isActive
+                            ? 'white'
+                            : 'var(--paper-2)',
+                        border: `1.5px solid ${
+                          isCompleted
+                            ? 'var(--klein)'
+                            : isActive
+                              ? 'var(--klein)'
+                              : 'var(--rule)'
+                        }`,
+                        color: isCompleted
+                          ? 'white'
+                          : isActive
+                            ? 'var(--klein)'
+                            : 'var(--ink-4)',
+                        boxShadow: isActive
+                          ? '0 0 0 6px rgba(30,42,255,0.10), 0 4px 14px -4px rgba(30,42,255,0.4)'
+                          : 'none',
+                        transition: 'all 0.3s',
+                      }}
+                    >
+                      {isCompleted ? (
+                        <CheckCircle2 size={18} strokeWidth={2.4} />
+                      ) : (
+                        <StageIcon size={15} strokeWidth={isActive ? 2.4 : 1.8} />
+                      )}
+                      {isActive && (
+                        <span
+                          style={{
+                            position: 'absolute',
+                            inset: -3,
+                            borderRadius: '50%',
+                            border: '1.5px solid var(--klein)',
+                            opacity: 0.4,
+                            animation: 'sp-pstepPulse 1.8s ease-in-out infinite',
+                            pointerEvents: 'none',
+                          }}
+                        />
+                      )}
                     </div>
-                    <div>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600 }}>{stage.label}</div>
-                      <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>{stage.desc}</div>
+
+                    {/* Label */}
+                    <div style={{ opacity: isCompleted || isActive ? 1 : 0.55, transition: 'opacity 0.3s' }}>
+                      <div
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 11.5,
+                          fontWeight: isActive ? 700 : 600,
+                          letterSpacing: '0.04em',
+                          color: isActive ? 'var(--klein)' : isCompleted ? 'var(--ink)' : 'var(--ink-2)',
+                          marginBottom: 2,
+                        }}
+                      >
+                        {stage.label}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--ink-3)', lineHeight: 1.45 }}>
+                        {stage.desc}
+                      </div>
                     </div>
                   </div>
                 );
@@ -204,13 +298,13 @@ export function ProcessingPage() {
                   <motion.div key="done" initial={{ scale: 0.9 }} animate={{ scale: 1 }}>
                     <CheckCircle2 className="mx-auto text-[var(--leaf)] mb-4" size={64} />
                     <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: 42 }}>Done.</h2>
-                    <p className="font-mono text-sm">Sonuçlara yönlendiriliyorsunuz... {countdown}</p>
+                    <p className="font-mono text-sm">Redirecting to results in {countdown}…</p>
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
 
-            {/* Görev 4: Metrik Sayaçları */}
+            {/* Metric counters */}
             <div className="grid grid-cols-2 gap-4">
               {[
                 { label: 'MSE', value: results?.mse, showAt: 4 },

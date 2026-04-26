@@ -337,7 +337,7 @@ export function UploadPage() {
               }}
             >
               <Sparkles style={{ width: 10, height: 10 }} />
-              Demo modunda çalışıyor
+              Running in demo mode
             </motion.span>
           )}
         </div>
@@ -1074,7 +1074,7 @@ export function UploadPage() {
                 </TooltipTrigger>
 
                 {!canProceed && (
-                  <TooltipContent side="top">Önce görsel yükle</TooltipContent>
+                  <TooltipContent side="top">Upload an image first</TooltipContent>
                 )}
               </Tooltip>
             </TooltipProvider>

@@ -10,7 +10,7 @@ import {
   Tooltip, Legend, ResponsiveContainer, RadarChart, Radar,
   PolarGrid, PolarAngleAxis, PolarRadiusAxis
 } from 'recharts';
-import { ComparisonSlider } from '../components/ComparisonSlider';
+import { ComparisonSlider, type ComparisonMode } from '../components/ComparisonSlider';
 import { InsightCard } from '../components/InsightCard';
 
 const DEMO_IMAGE = 'https://images.unsplash.com/photo-1581447547509-711eb65cd5f2?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxsYW5kc2NhcGUlMjBtb3VudGFpbiUyMGdyYXlzY2FsZSUyMG5hdHVyZXxlbnwxfHx8fDE3NzY3NjEzOTJ8MA&ixlib=rb-4.1.0&q=80&w=1080';
@@ -63,6 +63,7 @@ const ttStyle = {
 export function ResultsPage() {
   const [activeTab, setActiveTab] = useState<TabType>('jpeg2000');
   const [lastResult, setLastResult] = useState<typeof DEMO_RESULT | null>(null);
+  const [compareMode, setCompareMode] = useState<ComparisonMode>('split');
   const handleDownloadJSON = () => {
   const blob = new Blob(
     [JSON.stringify(currentResult, null, 2)],
@@ -237,12 +238,37 @@ export function ResultsPage() {
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.2em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>COMPARATOR · DRAG THE HANDLE</span>
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--ink-4)' }}>{result.imageName}</span>
               </div>
-              <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-               <button>REVEAL</button>
-               <button>SPLIT</button>
-              <button>LENS</button>
-          </div>
+              <div style={{ display: 'inline-flex', gap: 4, marginBottom: 12, padding: 4, background: 'white', border: '1px solid var(--rule)', borderRadius: 'var(--r-md)' }}>
+                {(['split', 'reveal', 'lens'] as const).map(m => {
+                  const active = compareMode === m;
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setCompareMode(m)}
+                      style={{
+                        padding: '7px 16px',
+                        borderRadius: 8,
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 10.5,
+                        letterSpacing: '0.15em',
+                        textTransform: 'uppercase',
+                        fontWeight: active ? 600 : 500,
+                        background: active ? 'var(--ink)' : 'transparent',
+                        color: active ? 'var(--paper)' : 'var(--ink-3)',
+                        boxShadow: active ? '0 2px 8px -2px rgba(10,11,14,0.3)' : 'none',
+                        transition: 'all 0.18s',
+                      }}
+                    >
+                      {m}
+                    </button>
+                  );
+                })}
+              </div>
               <ComparisonSlider
+                mode={compareMode}
                 originalSrc={imgSrc}
                 reconstructedSrc={imgSrc}
                 originalFilter="none"

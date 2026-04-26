@@ -116,10 +116,6 @@ export function Navbar() {
 
         {/* ── Right ── */}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--ink-3)', letterSpacing: '0.1em', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--leaf)', boxShadow: '0 0 0 3px rgba(31,138,94,0.15)', animation: 'sp-pulse 2s ease-in-out infinite', display: 'inline-block' }} />
-            <span className="hidden md:inline">LIVE</span>
-          </span>
           <Link to="/upload" className="sp-btn sp-btn-klein sp-btn-sm">
             Start pipeline →
           </Link>

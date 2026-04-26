@@ -143,11 +143,11 @@ export function TransformPage() {
             fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.18em',
             textTransform: 'uppercase', padding: '3px 10px', borderRadius: 100,
             background: 'var(--cyan)', color: 'var(--paper)', fontWeight: 600,
-          }}>Demo Modu</span>
+          }}>Demo Mode</span>
           <p style={{ fontSize: 12.5, color: 'var(--ink-2)', fontFamily: 'var(--font-mono)' }}>
-            Yüklenmiş görüntü bulunamadı. Varsayılan değerlerle devam ediyorsunuz.{' '}
+            No uploaded image found — continuing with default values.{' '}
             <Link to="/upload" style={{ color: 'var(--klein)', textDecoration: 'underline' }}>
-              Görüntü yükle
+              Upload an image
             </Link>
           </p>
         </motion.div>
@@ -264,7 +264,7 @@ export function TransformPage() {
                           </button>
                         ))}
                       </div>
-                      {/* Seçili wavelet açıklaması */}
+                      {/* Selected wavelet description */}
                       <AnimatePresence mode="wait">
                         <motion.p
                           key={settings.waveletFilter}
@@ -307,21 +307,21 @@ export function TransformPage() {
             )}
           </AnimatePresence>
 
-          {/* ── Seçim Özet Kartı ── */}
+          {/* ── Selection summary card ── */}
           <div className="sp-card" style={{ padding: '16px 20px' }}>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.2em', color: 'var(--ink-3)', textTransform: 'uppercase', marginBottom: 12 }}>
-              Seçim Özeti
+              Selection Summary
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[
-                { label: 'Yöntem', value: settings.method === 'jpeg' ? 'JPEG (DCT)' : 'JPEG 2000 (DWT)' },
+                { label: 'Method', value: settings.method === 'jpeg' ? 'JPEG (DCT)' : 'JPEG 2000 (DWT)' },
                 ...(settings.method === 'jpeg2000' ? [
-                  { label: 'Wavelet Filtre', value: WAVELET_INFO[settings.waveletFilter]?.full ?? settings.waveletFilter },
-                  { label: 'Ayrışım Seviyesi', value: `Level ${settings.decompositionLevel}` },
-                  { label: 'Subband Sayısı', value: `${3 * settings.decompositionLevel + 1} subband` },
+                  { label: 'Wavelet filter', value: WAVELET_INFO[settings.waveletFilter]?.full ?? settings.waveletFilter },
+                  { label: 'Decomposition level', value: `Level ${settings.decompositionLevel}` },
+                  { label: 'Subband count', value: `${3 * settings.decompositionLevel + 1} subbands` },
                 ] : [
-                  { label: 'Blok Boyutu', value: '8 × 8 px' },
-                  { label: 'Bazis Fonksiyonları', value: '64 cosine' },
+                  { label: 'Block size', value: '8 × 8 px' },
+                  { label: 'Basis functions', value: '64 cosine' },
                 ]),
               ].map(row => (
                 <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 7, borderBottom: '1px solid var(--rule-soft)' }}>
