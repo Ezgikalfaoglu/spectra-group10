@@ -1,130 +1,95 @@
-# 👋 Melike — Senin Branch'in: `feature/processing-melike`
+# 👋 Fatmanur — Senin Branch'in: `feature/transform-fatmanur`
 
 ## GitHub Codespaces ile Aç (Tavsiye Edilen — kurulum gerektirmez)
 
-1. `github.com/Ezgikalfaoglu/spectra-group10` → branch olarak **`feature/processing-melike`** seç
-2. Yeşil **`<> Code`** butonu → **Codespaces** sekmesi → **Create codespace on feature/processing-melike**
+1. `github.com/Ezgikalfaoglu/spectra-group10` → branch olarak **`feature/transform-fatmanur`** seç
+2. Yeşil **`<> Code`** butonu → **Codespaces** sekmesi → **Create codespace on feature/transform-fatmanur**
 3. Tarayıcıda VS Code açılır, terminale yaz:
 ```bash
 npm install
 npm run dev
 ```
-4. Açılan port linkine tıkla → `http://localhost:3000/processing` canlı görünür
+4. Açılan port linkine tıkla → `http://localhost:3000/transform` canlı görünür
 
 ## Yerel Çalıştırma (isteğe bağlı)
 ```bash
 git clone https://github.com/Ezgikalfaoglu/spectra-group10.git
 cd spectra-group10
-git checkout feature/processing-melike
+git checkout feature/transform-fatmanur
 npm install
 npm run dev
-# Tarayıcı: http://localhost:3000/processing
+# Tarayıcı: http://localhost:3000/transform
 ```
 
 ---
 
 ## Senin Dosyan
 ```
-src/app/pages/ProcessingPage.tsx   ← SADECE BU DOSYAYA DOKUNUYORSUN
+src/app/pages/TransformPage.tsx   ← SADECE BU DOSYAYA DOKUNUYORSUN
 ```
 
 ## Yapman Gerekenler
 
-### 1. 7 Aşamalı Pipeline Animasyonu
-Aşamalar sırayla: **Input → Preproc. → Transform → Quant. → Entropy → Reconst. → Eval.**
+### 1. Yöntem Seçici (Segmented Control)
+- İki buton yan yana: **"JPEG (DCT)"** | **"J2K (DWT)"**
+- `sp-seg` / `sp-seg-btn` / `sp-seg-btn-active` class'larını kullan
+- Seçim değişince `AnimatePresence` ile alt seçenekler animasyonlu açılır/kapanır
 
-Her aşama için class:
-- Bekliyor → varsayılan `sp-pstep-dot`
-- Aktif (şu an işleniyor) → `sp-pstep-dot-active` (klein mavi + pulse)
-- Tamamlandı → `sp-pstep-dot-done` (yeşil + tik)
+### 2. Wavelet Filtre Seçimi *(sadece J2K seçilince görünür)*
+Üç pill buton:
+- `Haar` · `db2` · `db4`
+- `sp-pill` class; seçili → `sp-pill-active` (klein mavi)
 
-Aşamalar arası progress bar: `sp-pipe-fill` genişler (örn. aşama 3/7 → %43)
+### 3. Ayrışım Seviyesi *(sadece J2K seçilince görünür)*
+- 1'den 5'e pill butonlar yan yana
+- Seçilen seviye değişince `DWTSubbandsViz` bileşeni canlı güncellenir
+- Geçişte animasyon ekle (`motion`)
 
-### 2. Aktif Aşama Açıklaması
-Ortada büyük `font-serif italic` ile aktif aşamanın adı + kısa açıklama:
-```
-"Entropy Coding…"
-"Huffman ağacı oluşturuluyor, semboller kodlanıyor."
-```
-
-### 3. Shimmer Efekti
-- İşlem devam ederken başlık veya kart üzerinde CSS shimmer animasyonu
-- İşlem bitince shimmer **durur** (dekoratif loop yok — gerçek state)
-
-### 4. Metriklerin Sayaç Animasyonuyla Gelmesi
-Her aşama tamamlanınca ilgili metrik `motion` ile sayaç animasyonuyla belirir:
-- Aşama 3 → Transform verisi
-- Aşama 5 → MSE ve PSNR
-- Aşama 7 → CR ve Sparsity
-
+### 4. DWT Alt-Bant Görselleştirmesi
+- `DWTSubbandsViz` bileşenini import et ve kullan:
 ```tsx
-// Sayaç animasyonu örneği (motion ile)
-<motion.span
-  initial={{ opacity: 0, y: 8 }}
-  animate={{ opacity: 1, y: 0 }}
-  transition={{ duration: 0.4 }}
->
-  {value}
-</motion.span>
+import { DWTSubbandsViz } from '../components/DWTSubbandsViz';
+<DWTSubbandsViz level={decompositionLevel} />
 ```
+- Seviye değişince bileşen animasyonlu geçiş yapsın
 
-### 5. Tamamlandı Ekranı
-Tüm aşamalar bitince:
-- Büyük `CheckCircle2` ikonu (yeşil)
-- `font-serif` ile "Done."
-- "Sonuçlara yönlendiriliyorsunuz... 3" geri sayım
-- 3 saniye sonra otomatik `/results`'a git
+### 5. Seçim Özet Kartı
+- Seçilen metot + tüm parametreleri `paper-2` arka planlı kart içinde göster
+- Font: `font-mono`, renk: `var(--ink-3)` label · `var(--ink)` değer
 
-### 6. Hata Durumu
-Herhangi bir aşama başarısız olursa:
-- `AlertTriangle` ikonu (kırmızı/amber)
-- Hangi aşamada hata olduğu
-- "Tekrar Dene" butonu (`sp-btn sp-btn-ghost`)
+### 6. Geri / İleri Navigasyon
+- `sp-btn sp-btn-ghost` → ← `/upload`
+- `sp-btn sp-btn-klein` → `/quantization` →
+- `localStorage["spectra_transform"]`'a kaydet sonra ileri git
 
 ### 7. Demo Modu
-- localStorage boşsa örnek metriklerle sahte pipeline çalıştır
-- Her aşama 800ms beklesin (setTimeout/useEffect ile)
+- `localStorage["spectra_upload"]` boşsa varsayılan değerlerle başlat
+- Küçük "Demo modu" badge göster
 
 ---
 
 ## Renk & Stil Referansı
 ```css
-var(--klein)    /* aktif aşama rengi */
-var(--leaf)     /* tamamlanan aşama, yeşil */
-var(--cyan)     /* #00D4FF — "canlı işlem" göstergesi */
-var(--paper-2)  /* kart arka planı */
-var(--font-serif) /* büyük metrik sayıları, "Done." */
-var(--font-mono)  /* aşama label'ları, % değerleri */
+var(--klein)     /* #1E2AFF — seçili state */
+var(--paper-2)   /* kart arka planı */
+var(--rule)      /* hairline border */
+var(--font-mono) /* sayılar ve label'lar */
+var(--cyan)      /* #00D4FF — sadece aktif/canlı state */
 ```
 
 ## localStorage Çıktın
 ```js
-// lastResult
-localStorage.setItem("lastResult", JSON.stringify({
-  id: Date.now().toString(),
-  date: new Date().toISOString(),
-  imageName: "gorsel.jpg",
-  method: "JPEG2000",
-  wavelet: "db4",
-  decompLevel: 3,
-  quantType: "scalar",
-  stepSize: 18,
-  mse: 42.73,
-  psnr: 31.82,
-  cr: "10.4:1",
-  sparsity: "78%"
+localStorage.setItem("spectra_transform", JSON.stringify({
+  method: "jpeg2000",        // "jpeg" | "jpeg2000"
+  waveletFilter: "db4",      // "haar" | "db2" | "db4"
+  decompositionLevel: 3      // 1-5
 }))
-
-// compressionHistory — diziye ekle
-const history = JSON.parse(localStorage.getItem("compressionHistory") || "[]")
-history.unshift(result)
-localStorage.setItem("compressionHistory", JSON.stringify(history))
 ```
 
 ## Commit & Push
 ```bash
-git add src/app/pages/ProcessingPage.tsx
-git commit -m "feat(processing): 7 aşama pipeline animasyonu ve sayaç efektleri"
+git add src/app/pages/TransformPage.tsx
+git commit -m "feat(transform): yöntem seçici ve DWT vizualizasyonu"
 git push
 ```
 Bitince GitHub'da **Pull Request** aç → Ezgi review yapar.
