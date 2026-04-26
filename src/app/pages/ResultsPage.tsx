@@ -63,6 +63,21 @@ const ttStyle = {
 export function ResultsPage() {
   const [activeTab, setActiveTab] = useState<TabType>('jpeg2000');
   const [lastResult, setLastResult] = useState<typeof DEMO_RESULT | null>(null);
+  const handleDownloadJSON = () => {
+  const blob = new Blob(
+    [JSON.stringify(currentResult, null, 2)],
+    { type: 'application/json' }
+  );
+
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'spectra-result.json';
+  a.click();
+
+  URL.revokeObjectURL(url);
+};
 
   useEffect(() => {
     const stored = localStorage.getItem('lastResult');
@@ -72,7 +87,35 @@ export function ResultsPage() {
   const result = lastResult || DEMO_RESULT;
   const isDemo = !lastResult;
   const currentResult = activeTab === 'jpeg' ? JPEG_DEMO : result;
+  const baselineResult = activeTab === 'jpeg2000' ? JPEG_DEMO : result;
   const imgSrc = currentResult.imageDataUrl || DEMO_IMAGE;
+
+  const renderDelta = (label: string, current: number, baseline: number) => {
+    const betterIsLower = label === 'MSE';
+    const delta = betterIsLower
+      ? ((baseline - current) / baseline) * 100
+      : ((current - baseline) / baseline) * 100;
+    const improved = betterIsLower ? delta > 0 : delta > 0;
+    const arrow = improved ? '↑' : '↓';
+    const color = improved ? 'var(--leaf)' : 'rgba(212,87,76,1)';
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontFamily: 'var(--font-mono)', fontSize: 11, color }}>
+        <span>{arrow}</span>
+        <span>{Math.abs(delta).toFixed(1)}%</span>
+        <span style={{ color: 'var(--ink-4)' }}>
+          vs {activeTab === 'jpeg2000' ? 'JPEG' : 'JPEG2000'}
+        </span>
+      </div>
+    );
+  };
+
+  const normalizedProgress = (label: string) => {
+    if (label === 'PSNR') return `${Math.min(100, Math.max(0, (currentResult.psnr / 40) * 100))}%`;
+    if (label === 'MSE') return `${Math.min(100, Math.max(0, 100 - (currentResult.mse / 120) * 100))}%`;
+    if (label === 'CR') return `${Math.min(100, Math.max(0, (parseFloat(currentResult.cr) / 24) * 100))}%`;
+    if (label === 'Sparsity') return `${Math.min(100, Math.max(0, parseInt(currentResult.sparsity) ))}%`;
+    return '0%';
+  };
 
   return (
     <motion.div
@@ -97,9 +140,9 @@ export function ResultsPage() {
             <RefreshCw style={{ width: 12, height: 12 }} />
             New Run
           </Link>
-          <button className="sp-btn sp-btn-ghost sp-btn-sm">
-            <Download style={{ width: 12, height: 12 }} />
-            Export
+          <button onClick={handleDownloadJSON}className="sp-btn sp-btn-ghost sp-btn-sm">
+          <Download style={{ width: 12, height: 12 }} />
+            JSON
           </button>
         </div>
       </div>
@@ -117,20 +160,25 @@ export function ResultsPage() {
       {/* Metrics row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 28 }}>
         {[
-          { label: 'MSE', value: `${currentResult.mse?.toFixed?.(2) ?? currentResult.mse}`, hint: 'Lower is better' },
-          { label: 'PSNR', value: `${currentResult.psnr?.toFixed?.(2) ?? currentResult.psnr}`, unit: 'dB', hint: '> 30 dB threshold' },
-          { label: 'CR', value: currentResult.cr, hint: 'Size reduction' },
-          { label: 'Sparsity', value: currentResult.sparsity, hint: 'Zero coefficients' },
-        ].map(m => (
-          <div key={m.label} className="sp-card" style={{ padding: '18px 20px', position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', top: 0, left: 0, width: 3, height: '100%', background: 'var(--klein)', borderRadius: '3px 0 0 3px' }} />
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.2em', color: 'var(--ink-3)', textTransform: 'uppercase', marginBottom: 8 }}>{m.label}</div>
-            <div style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 34, lineHeight: 1, color: 'var(--ink)', letterSpacing: '-0.015em', marginBottom: 4 }}>
-              {m.value}{(m as any).unit && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--klein)', fontStyle: 'normal', marginLeft: 4 }}>{(m as any).unit}</span>}
+          { label: 'MSE', value: `${currentResult.mse?.toFixed?.(2) ?? currentResult.mse}`, hint: 'Lower is better', currentValue: currentResult.mse, baselineValue: baselineResult.mse },
+          { label: 'PSNR', value: `${currentResult.psnr?.toFixed?.(2) ?? currentResult.psnr}`, unit: 'dB', hint: '> 30 dB threshold', currentValue: currentResult.psnr, baselineValue: baselineResult.psnr },
+          { label: 'CR', value: currentResult.cr, hint: 'Size reduction', currentValue: parseFloat(currentResult.cr), baselineValue: parseFloat(baselineResult.cr) },
+          { label: 'Sparsity', value: currentResult.sparsity, hint: 'Zero coefficients', currentValue: parseFloat(currentResult.sparsity), baselineValue: parseFloat(baselineResult.sparsity) },
+        ].map(m => {
+          const delta = renderDelta(m.label, m.currentValue, m.baselineValue);
+          return (
+            <div key={m.label} className="sp-card" style={{ padding: '18px 20px', position: 'relative', overflow: 'hidden' }}>
+              <div style={{ position: 'absolute', top: 0, left: 0, width: 3, height: '100%', background: 'var(--klein)', borderRadius: '3px 0 0 3px' }} />
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.2em', color: 'var(--ink-3)', textTransform: 'uppercase', marginBottom: 8 }}>{m.label}</div>
+              <div style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 34, lineHeight: 1, color: 'var(--ink)', letterSpacing: '-0.015em', marginBottom: 4 }}>
+                {m.value}{(m as any).unit && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--klein)', fontStyle: 'normal', marginLeft: 4 }}>{(m as any).unit}</span>}
+              </div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--ink-4)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>{m.hint}</div>
+              {delta}
+              <div style={{ height: 4, width: normalizedProgress(m.label), background: 'var(--klein)', marginTop: 8, borderRadius: 999 }} />
             </div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--ink-4)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>{m.hint}</div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Insight */}
@@ -189,11 +237,16 @@ export function ResultsPage() {
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.2em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>COMPARATOR · DRAG THE HANDLE</span>
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--ink-4)' }}>{result.imageName}</span>
               </div>
+              <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+               <button>REVEAL</button>
+               <button>SPLIT</button>
+              <button>LENS</button>
+          </div>
               <ComparisonSlider
                 originalSrc={imgSrc}
                 reconstructedSrc={imgSrc}
                 originalFilter="none"
-                reconstructedFilter={`contrast(${currentResult.stepSize > 20 ? 0.88 : 0.94}) brightness(${currentResult.stepSize > 20 ? 1.04 : 1.01}) blur(${currentResult.stepSize > 24 ? 0.4 : 0}px)`}
+                reconstructedFilter={`blur(${currentResult.stepSize > 22 ? 2.4 : currentResult.stepSize > 16 ? 1.4 : 0.8}px) contrast(${currentResult.stepSize > 22 ? 0.82 : currentResult.stepSize > 16 ? 0.9 : 0.96}) saturate(${currentResult.stepSize > 20 ? 0.88 : 0.98}) brightness(${currentResult.stepSize > 20 ? 1.04 : 1.01})`}
               />
             </div>
 
