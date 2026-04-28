@@ -129,13 +129,13 @@ export function ProcessingPage() {
     });
   }, [upload, transform, quant]);
 
-  // Countdown + auto-redirect to reconstruction
+  // Countdown + auto-redirect to results
   useEffect(() => {
     if (isDone && countdown > 0) {
       const timer = setInterval(() => setCountdown(c => c - 1), 1000);
       return () => clearInterval(timer);
     } else if (isDone && countdown === 0) {
-      navigate('/reconstruction');
+      navigate('/results');
     }
   }, [isDone, countdown, navigate]);
 
@@ -298,7 +298,7 @@ export function ProcessingPage() {
                   <motion.div key="done" initial={{ scale: 0.9 }} animate={{ scale: 1 }}>
                     <CheckCircle2 className="mx-auto text-[var(--leaf)] mb-4" size={64} />
                     <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: 42 }}>Done.</h2>
-                    <p className="font-mono text-sm">Redirecting to reconstruction in {countdown}…</p>
+                    <p className="font-mono text-sm">Redirecting to results in {countdown}…</p>
                   </motion.div>
                 )}
               </AnimatePresence>

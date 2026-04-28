@@ -8,7 +8,6 @@ const PIPELINE_STEPS = [
   { path: '/quantization',    num: '04', label: 'Quantize'  },
   { path: '/entropy',         num: '05', label: 'Entropy'   },
   { path: '/processing',      num: '06', label: 'Process'   },
-  { path: '/reconstruction',  num: '07', label: 'Rebuild'   },
 ];
 
 const TOP_LINKS = [

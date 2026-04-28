@@ -7,7 +7,6 @@ import { TransformPage }       from './pages/TransformPage';
 import { QuantizationPage }    from './pages/QuantizationPage';
 import { EntropyPage }         from './pages/EntropyPage';
 import { ProcessingPage }      from './pages/ProcessingPage';
-import { ReconstructionPage }  from './pages/ReconstructionPage';
 import { ResultsPage }         from './pages/ResultsPage';
 import { HistoryPage }         from './pages/HistoryPage';
 import { DashboardPage }       from './pages/DashboardPage';
@@ -26,7 +25,6 @@ export const router = createBrowserRouter([
       { path: 'quantization',     Component: QuantizationPage    },
       { path: 'entropy',          Component: EntropyPage         },
       { path: 'processing',       Component: ProcessingPage      },
-      { path: 'reconstruction',   Component: ReconstructionPage  },
 
       /* ─── Review / Analysis ─── */
       { path: 'results',          Component: ResultsPage         },

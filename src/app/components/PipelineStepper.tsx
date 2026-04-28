@@ -7,17 +7,15 @@ import { Check } from 'lucide-react';
    ─── */
 
 const STEPS = [
-  { id: 'upload',         label: 'Upload',     sub: 'Specimen',   path: '/upload',         num: '01' },
-  { id: 'preprocessing',  label: 'Preproc',    sub: 'Color space', path: '/preprocessing', num: '02' },
-  { id: 'transform',      label: 'Transform',  sub: 'Method',      path: '/transform',     num: '03' },
-  { id: 'quantize',       label: 'Quantize',   sub: 'Parameters',  path: '/quantization',  num: '04' },
-  { id: 'entropy',        label: 'Entropy',    sub: 'Coder',       path: '/entropy',       num: '05' },
-  { id: 'process',        label: 'Process',    sub: 'Pipeline',    path: '/processing',    num: '06' },
-  { id: 'reconstruction', label: 'Rebuild',    sub: 'Inverse',     path: '/reconstruction', num: '07' },
+  { id: 'upload',         label: 'Upload',     sub: 'Specimen',    path: '/upload',         num: '01' },
+  { id: 'preprocessing',  label: 'Preproc',    sub: 'Color space', path: '/preprocessing',  num: '02' },
+  { id: 'transform',      label: 'Transform',  sub: 'Method',      path: '/transform',      num: '03' },
+  { id: 'quantize',       label: 'Quantize',   sub: 'Parameters',  path: '/quantization',   num: '04' },
+  { id: 'entropy',        label: 'Entropy',    sub: 'Coder',       path: '/entropy',        num: '05' },
+  { id: 'process',        label: 'Process',    sub: 'Pipeline',    path: '/processing',     num: '06' },
 ];
 
 function getActiveIndex(pathname: string): number {
-  if (pathname.startsWith('/reconstruction')) return 6;
   if (pathname.startsWith('/processing'))     return 5;
   if (pathname.startsWith('/entropy'))        return 4;
   if (pathname.startsWith('/quantization'))   return 3;
