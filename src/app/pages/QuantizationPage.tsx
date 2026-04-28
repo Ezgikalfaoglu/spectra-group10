@@ -106,7 +106,7 @@ export function QuantizationPage() {
 
   const handleNext = () => {
     localStorage.setItem('spectra_quantization', JSON.stringify(settings));
-    navigate('/processing');
+    navigate('/entropy');
   };
 
   const metrics = estimateMetrics(settings.stepSize, settings.lossless);
@@ -338,7 +338,7 @@ export function QuantizationPage() {
               className="sp-btn sp-btn-klein"
               style={{ flex: 2, justifyContent: 'center' }}
             >
-              Processing
+              Next: Entropy
               <ArrowRight style={{ width: 14, height: 14 }} />
             </button>
           </div>

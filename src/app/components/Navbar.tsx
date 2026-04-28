@@ -2,10 +2,13 @@ import { Link, useLocation } from 'react-router';
 
 /* ─── Pipeline flow steps (shown as connected group) ─── */
 const PIPELINE_STEPS = [
-  { path: '/upload',       num: '01', label: 'Upload'    },
-  { path: '/transform',    num: '02', label: 'Transform' },
-  { path: '/quantization', num: '03', label: 'Quantize'  },
-  { path: '/processing',   num: '04', label: 'Process'   },
+  { path: '/upload',          num: '01', label: 'Upload'    },
+  { path: '/preprocessing',   num: '02', label: 'Preproc'   },
+  { path: '/transform',       num: '03', label: 'Transform' },
+  { path: '/quantization',    num: '04', label: 'Quantize'  },
+  { path: '/entropy',         num: '05', label: 'Entropy'   },
+  { path: '/processing',      num: '06', label: 'Process'   },
+  { path: '/reconstruction',  num: '07', label: 'Rebuild'   },
 ];
 
 const TOP_LINKS = [
@@ -85,27 +88,27 @@ export function Navbar() {
                 <Link
                   to={step.path}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 5,
-                    textDecoration: 'none', padding: '4px 8px', borderRadius: 100,
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    textDecoration: 'none', padding: '4px 7px', borderRadius: 100,
                     background: isActive ? 'white' : 'transparent',
                     boxShadow: isActive ? '0 1px 4px rgba(10,11,14,0.1)' : 'none',
                     transition: 'all 0.18s',
                   }}
                 >
                   <span style={{
-                    fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.08em',
+                    fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.06em',
                     color: isActive ? 'var(--klein)' : isDone ? 'var(--leaf)' : 'var(--ink-4)',
                   }}>{step.num}</span>
                   <span style={{
-                    fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.06em',
-                    textTransform: 'uppercase',
+                    fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.05em',
+                    textTransform: 'uppercase', whiteSpace: 'nowrap',
                     color: isActive ? 'var(--klein)' : isDone ? 'var(--leaf)' : 'var(--ink-4)',
                     fontWeight: isActive ? 600 : 400,
                   }}>{step.label}</span>
                 </Link>
                 {idx < PIPELINE_STEPS.length - 1 && (
                   <span style={{
-                    width: 14, height: 1, background: isDone ? 'var(--leaf)' : 'var(--rule)',
+                    width: 8, height: 1, background: isDone ? 'var(--leaf)' : 'var(--rule)',
                     display: 'inline-block', flexShrink: 0, transition: 'background 0.3s',
                   }} />
                 )}

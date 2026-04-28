@@ -273,7 +273,7 @@ export function UploadPage() {
     if (!file || isDemo) return;
 
     localStorage.setItem('spectra_upload', JSON.stringify(file));
-    navigate('/transform');
+    navigate('/preprocessing');
   };
 
   const isForced =
@@ -1067,7 +1067,7 @@ export function UploadPage() {
                         cursor: canProceed ? 'pointer' : 'not-allowed',
                       }}
                     >
-                      Next: Transform
+                      Next: Preprocess
                       <ArrowRight style={{ width: 14, height: 14 }} />
                     </button>
                   </span>
