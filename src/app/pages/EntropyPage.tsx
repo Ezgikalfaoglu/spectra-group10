@@ -11,14 +11,10 @@ import { PipelineStepper } from '../components/PipelineStepper';
 
 interface EntropySettings {
   coder: 'huffman-default' | 'huffman-custom' | 'arithmetic';
-  useRLE: boolean;
-  zigzag: boolean;
 }
 
 const DEFAULTS: EntropySettings = {
   coder: 'huffman-default',
-  useRLE: true,
-  zigzag: true,
 };
 
 const CODERS: { id: EntropySettings['coder']; label: string; sub: string; desc: string }[] = [
@@ -30,12 +26,10 @@ const CODERS: { id: EntropySettings['coder']; label: string; sub: string; desc: 
     desc: 'Range / arithmetic coding (MQ coder for J2K). Higher compression ratio than Huffman, slightly slower.' },
 ];
 
-function estimateBitRate(coder: EntropySettings['coder'], rle: boolean, zigzag: boolean) {
+function estimateBitRate(coder: EntropySettings['coder']) {
   let bpp = 0.92;
   if (coder === 'huffman-custom') bpp -= 0.06;
   if (coder === 'arithmetic') bpp -= 0.12;
-  if (rle) bpp -= 0.08;
-  if (zigzag) bpp -= 0.04;
   return Math.max(0.32, +bpp.toFixed(2));
 }
 
@@ -58,7 +52,7 @@ export function EntropyPage() {
     navigate('/processing');
   };
 
-  const bpp = estimateBitRate(settings.coder, settings.useRLE, settings.zigzag);
+  const bpp = estimateBitRate(settings.coder);
   const cr = (8 / bpp).toFixed(1);
 
   return (
@@ -139,55 +133,6 @@ export function EntropyPage() {
                       {isSelected && <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--klein)' }} />}
                     </div>
                   </motion.button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="sp-card" style={{ overflow: 'hidden' }}>
-            <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--rule)' }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.22em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>PRE-CODER OPTIONS</span>
-            </div>
-            <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {[
-                { k: 'zigzag' as const, label: 'Zig-zag scan', desc: 'Reorder 2D coefficients into a 1D sequence prioritising low-frequency terms (DCT only).' },
-                { k: 'useRLE' as const, label: 'Run-length encode zeros', desc: 'Collapse consecutive zero coefficients into (run, value) pairs before entropy coding.' },
-              ].map(row => {
-                const isOn = settings[row.k];
-                return (
-                  <div key={row.k}
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      padding: '14px 16px', borderRadius: 'var(--r-md)',
-                      border: `1px solid ${isOn ? 'rgba(30,42,255,0.25)' : 'var(--rule)'}`,
-                      background: isOn ? 'rgba(30,42,255,0.04)' : 'white',
-                    }}
-                  >
-                    <div style={{ marginRight: 12 }}>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, fontWeight: 600, color: isOn ? 'var(--klein)' : 'var(--ink)', letterSpacing: '0.05em', marginBottom: 3 }}>
-                        {row.label}
-                      </div>
-                      <p style={{ fontSize: 11.5, color: 'var(--ink-3)', lineHeight: 1.45 }}>{row.desc}</p>
-                    </div>
-                    <button
-                      onClick={() => update(row.k, !isOn)}
-                      role="switch"
-                      aria-checked={isOn}
-                      style={{
-                        width: 42, height: 24, borderRadius: 100,
-                        background: isOn ? 'var(--klein)' : 'var(--paper-3)',
-                        border: 'none', position: 'relative', cursor: 'pointer',
-                        transition: 'background 0.2s', flexShrink: 0,
-                      }}
-                    >
-                      <span style={{
-                        position: 'absolute', top: 3, left: isOn ? 21 : 3,
-                        width: 18, height: 18, borderRadius: '50%',
-                        background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
-                        transition: 'left 0.2s',
-                      }} />
-                    </button>
-                  </div>
                 );
               })}
             </div>
