@@ -1,95 +1,210 @@
-# 👋 Fatmanur — Senin Branch'in: `feature/transform-fatmanur`
+# 👋 Melike — `feature/processing-melike`
 
-## GitHub Codespaces ile Aç (Tavsiye Edilen — kurulum gerektirmez)
+> **İterasyon 2** — Hoca geri bildirimleri sonrası
+> Genel proje haritası: `TASKS_V2.md` (main'de)
 
-1. `github.com/Ezgikalfaoglu/spectra-group10` → branch olarak **`feature/transform-fatmanur`** seç
-2. Yeşil **`<> Code`** butonu → **Codespaces** sekmesi → **Create codespace on feature/transform-fatmanur**
-3. Tarayıcıda VS Code açılır, terminale yaz:
+## 📋 Senin sorumluluğun
+
+- ✅ `/processing` — Senin sayfan
+
+> ⚠️ **Hoca'nın özel ricaları (senin tarafına etki edenler):**
+> 1. CR minimum 16 olsun, bozulma görünür olsun → `computeResults` formülü güncellendi ✅
+> 2. AI / Natural / Fingerprint gibi farklı veri tipleriyle "training" → `imageType` bilgisi artık `computeResults`'a geçiyor ✅
+> Senin görevin: process ekranını **daha bilgilendirici** yapmak.
+
+---
+
+## 🚀 1. Ortamı kur
+
+### GitHub Codespaces (tavsiye)
+1. https://github.com/Ezgikalfaoglu/spectra-group10 → **`<> Code`** → **Codespaces** → **Create codespace on `feature/processing-melike`**
+2. Terminal:
 ```bash
+nvm use 20
+git pull
 npm install
 npm run dev
 ```
-4. Açılan port linkine tıkla → `http://localhost:3000/transform` canlı görünür
 
-## Yerel Çalıştırma (isteğe bağlı)
+### Yerel
 ```bash
 git clone https://github.com/Ezgikalfaoglu/spectra-group10.git
 cd spectra-group10
-git checkout feature/transform-fatmanur
+git checkout feature/processing-melike
+git pull
+nvm use 20
 npm install
 npm run dev
-# Tarayıcı: http://localhost:3000/transform
 ```
+
+> ❗ `crypto$2.getRandomValues` hatası → `nvm use 20`
 
 ---
 
-## Senin Dosyan
-```
-src/app/pages/TransformPage.tsx   ← SADECE BU DOSYAYA DOKUNUYORSUN
-```
+## 🎯 2. Yapacakların
 
-## Yapman Gerekenler
+### Görev A — Pipeline log strip'i kart içine al
 
-### 1. Yöntem Seçici (Segmented Control)
-- İki buton yan yana: **"JPEG (DCT)"** | **"J2K (DWT)"**
-- `sp-seg` / `sp-seg-btn` / `sp-seg-btn-active` class'larını kullan
-- Seçim değişince `AnimatePresence` ile alt seçenekler animasyonlu açılır/kapanır
+**Dosya:** `src/app/pages/ProcessingPage.tsx`
 
-### 2. Wavelet Filtre Seçimi *(sadece J2K seçilince görünür)*
-Üç pill buton:
-- `Haar` · `db2` · `db4`
-- `sp-pill` class; seçili → `sp-pill-active` (klein mavi)
+Şu an sağ panelde minimal bir log var. Onu **dark-ink kart** olarak yeniden tasarla:
 
-### 3. Ayrışım Seviyesi *(sadece J2K seçilince görünür)*
-- 1'den 5'e pill butonlar yan yana
-- Seçilen seviye değişince `DWTSubbandsViz` bileşeni canlı güncellenir
-- Geçişte animasyon ekle (`motion`)
-
-### 4. DWT Alt-Bant Görselleştirmesi
-- `DWTSubbandsViz` bileşenini import et ve kullan:
 ```tsx
-import { DWTSubbandsViz } from '../components/DWTSubbandsViz';
-<DWTSubbandsViz level={decompositionLevel} />
+<div style={{
+  marginTop: 24, padding: '20px 24px',
+  background: 'var(--ink)',
+  color: 'var(--paper)',
+  borderRadius: 'var(--r-md)',
+  fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.7,
+}}>
+  <div style={{
+    color: 'var(--cyan)', letterSpacing: '0.2em', fontSize: 10,
+    textTransform: 'uppercase', marginBottom: 10,
+  }}>
+    ◆ PIPELINE LOG · TAIL
+  </div>
+  {/* Her stage için bir satır, timestamp cyan, body soluk */}
+  <div style={{ opacity: currentStep >= 0 ? 1 : 0.4 }}>
+    <span style={{ color: 'var(--cyan)' }}>[03:14:22.018]</span> input · decoded TIFF 1024 × 1024 RGB · 2.8 MB
+  </div>
+  <div style={{ opacity: currentStep >= 1 ? 1 : 0.4 }}>
+    <span style={{ color: 'var(--cyan)' }}>[03:14:22.041]</span> preproc · YCbCr transform complete
+  </div>
+  {/* ... 7 stage ... */}
+</div>
 ```
-- Seviye değişince bileşen animasyonlu geçiş yapsın
 
-### 5. Seçim Özet Kartı
-- Seçilen metot + tüm parametreleri `paper-2` arka planlı kart içinde göster
-- Font: `font-mono`, renk: `var(--ink-3)` label · `var(--ink)` değer
+Her stage'in kendi log satırı olsun, `currentStep` ilerledikçe `opacity: 1` olsun. Hoca'ya gerçek bir process log'u görüntüsü ver.
 
-### 6. Geri / İleri Navigasyon
-- `sp-btn sp-btn-ghost` → ← `/upload`
-- `sp-btn sp-btn-klein` → `/quantization` →
-- `localStorage["spectra_transform"]`'a kaydet sonra ileri git
+### Görev B — Hata simulasyonu (?fail=N query param)
 
-### 7. Demo Modu
-- `localStorage["spectra_upload"]` boşsa varsayılan değerlerle başlat
-- Küçük "Demo modu" badge göster
+**Dosya:** `src/app/pages/ProcessingPage.tsx`
+
+URL'de `?fail=2` parametresi varsa, 2. aşamada (DCT/DWT) **simulated error** göster:
+
+```tsx
+import { useSearchParams } from 'react-router';
+
+const [params] = useSearchParams();
+const failAt = params.get('fail') ? +params.get('fail')! : -1;
+
+// useEffect içinde, her step'te:
+if (idx === failAt) {
+  setError({ stage: idx, msg: PIPELINE_STAGES[idx].label + ' failed: simulated network timeout' });
+  setIsRunning(false);
+  return;
+}
+```
+
+Hata UI:
+```tsx
+{error && (
+  <div style={{
+    padding: 24, background: 'rgba(212,87,76,0.06)',
+    border: '1px solid rgba(212,87,76,0.3)', borderRadius: 'var(--r-md)',
+  }}>
+    <AlertTriangle size={32} color="#d4574c" />
+    <h3 style={{ fontFamily: 'var(--font-serif)' }}>Pipeline halted</h3>
+    <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{error.msg}</p>
+    <button onClick={retry} className="sp-btn sp-btn-klein">Retry from start</button>
+  </div>
+)}
+```
+
+Test: `http://localhost:5173/processing?fail=2`
+
+### Görev C — Type-aware aktif aşama metni
+
+**Dosya:** `src/app/pages/ProcessingPage.tsx`
+
+`getProfile(upload.imageType).blurb` kullanarak aktif aşama altında profile-specific metin göster:
+
+```tsx
+import { getProfile } from '../lib/imageTypeProfiles';
+
+const profile = upload ? getProfile(upload.imageType) : null;
+
+// Aktif stage başlığının altında:
+{profile && (
+  <p style={{
+    fontFamily: 'var(--font-mono)', fontSize: 11,
+    color: profile.accent, letterSpacing: '0.05em',
+    marginTop: 8, opacity: 0.85,
+  }}>
+    Tuned for {profile.label.toLowerCase()} · {profile.blurb.split('.')[0]}.
+  </p>
+)}
+```
+
+Yani Fingerprint için: "Tuned for fingerprint · Forensic data — cannot tolerate ridge alteration"
+
+### Görev D — Counter animation süresini metric büyüklüğüne göre uyarla
+
+**Dosya:** `src/app/pages/ProcessingPage.tsx` (sayaç kısımları)
+
+CR=64 gibi büyük sayılar 900ms'de hızlıca biter, kullanıcı göremez. Süreyi büyüklüğe göre ayarla:
+
+```tsx
+function durationFor(value: number) {
+  if (value > 50) return 1600;
+  if (value > 20) return 1200;
+  return 900;
+}
+```
+
+Mevcut counter kodunda `duration` prop'unu bu fonksiyonla geç.
 
 ---
 
-## Renk & Stil Referansı
-```css
-var(--klein)     /* #1E2AFF — seçili state */
-var(--paper-2)   /* kart arka planı */
-var(--rule)      /* hairline border */
-var(--font-mono) /* sayılar ve label'lar */
-var(--cyan)      /* #00D4FF — sadece aktif/canlı state */
-```
+## 🧪 3. Test et
 
-## localStorage Çıktın
-```js
-localStorage.setItem("spectra_transform", JSON.stringify({
-  method: "jpeg2000",        // "jpeg" | "jpeg2000"
-  waveletFilter: "db4",      // "haar" | "db2" | "db4"
-  decompositionLevel: 3      // 1-5
-}))
-```
-
-## Commit & Push
 ```bash
-git add src/app/pages/TransformPage.tsx
-git commit -m "feat(transform): yöntem seçici ve DWT vizualizasyonu"
-git push
+npm run dev
 ```
-Bitince GitHub'da **Pull Request** aç → Ezgi review yapar.
+
+Test senaryosu:
+1. Upload → Preproc → Transform → Quantize → Entropy → Process akışı sonuna kadar
+2. Process sayfasında:
+   - 7 aşama sırayla aktif oluyor
+   - Log strip dark cart, cyan timestamp ile dolu
+   - Aktif stage altında profile blurb'u görünüyor
+   - Bittikten sonra metric'ler animasyonla geliyor (büyük CR daha yavaş)
+3. `?fail=2` query → 2. aşamada error UI göründü mü?
+4. localStorage'da `lastResult.imageDataUrl` dolu mu? (Results sayfasının düzgün çalışması için kritik)
+
+Build:
+```bash
+npx tsc --noEmit
+npm run build
+```
+
+---
+
+## 📤 4. Commit & push
+
+```bash
+git add src/app/pages/ProcessingPage.tsx
+git commit -m "feat(processing): dark log strip, error simulation, type-aware text, scaled counters"
+git push origin feature/processing-melike
+```
+
+PR aç: `feature/processing-melike` → `main`
+
+---
+
+## 🆘 Takıldığında
+
+- **`useSearchParams` undefined diyor:** `react-router`'dan import etmeyi unutma
+- **Profile import error:** `import { getProfile } from '../lib/imageTypeProfiles';`
+- **Log opacity yanlış değişiyor:** `currentStep` 0-indexed mi 1-indexed mi kontrol et
+- **Counter çok hızlı/yavaş:** `useCountUp` içinde `duration` prop'u kullanılıyor olmalı
+
+---
+
+## 📚 Yararlı dosyalar
+
+- `src/app/pages/ProcessingPage.tsx` — senin sayfan
+- `src/app/lib/imageTypeProfiles.ts` — okuma
+- `TASKS_V2.md` — ekip roadmap'i
+
+İyi çalışmalar! ⚙️
