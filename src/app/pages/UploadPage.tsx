@@ -51,6 +51,11 @@ const IMAGE_TYPES = [
     hint: 'Landscape, portrait, outdoor',
   },
   {
+    value: 'AI Generated',
+    label: 'AI Generated',
+    hint: 'Diffusion / GAN output, midjourney-style',
+  },
+  {
     value: 'Synthetic',
     label: 'Synthetic',
     hint: 'Rendered, chart, computer-generated',

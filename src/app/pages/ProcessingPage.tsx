@@ -35,25 +35,45 @@ const PIPELINE_STAGES = [
 
 const STEP_DURATION = 800; // 800ms per stage
 
-/* ─── Compute results helper ─── */
-function computeResults(t: TransformSettings, q: QuantizationSettings): Results {
+/* ─── Compute results helper ─────────────────────────────────────────────
+ * CR floor is 16:1 even at minimal step. Distortion ramps hard at high Δ
+ * (PSNR drops below 18 dB, MSE rises sharply) so the visual artefacts in
+ * the comparator are clearly visible.
+ * ─────────────────────────────────────────────────────────────────────── */
+function computeResults(t: TransformSettings, q: QuantizationSettings, imageType?: string): Results {
   const s = q.stepSize;
+
+  // Type-specific multipliers — fingerprint and biomedical data is harder
+  // to compress losslessly, AI images compress slightly better than natural.
+  const typeBonus =
+    imageType === 'AI Generated' ? 1.10 :
+    imageType === 'Synthetic'    ? 1.18 :
+    imageType === 'Fingerprint'  ? 0.78 :
+    imageType === 'Biomedical'   ? 0.82 :
+    1.0;
+
   if (q.lossless) {
-    return { mse: 0.00, psnr: Infinity, compressionRatio: '2.4:1', sparsityRatio: '38%' };
+    const lossCR = (2.4 * typeBonus).toFixed(1);
+    return { mse: 0.00, psnr: Infinity, compressionRatio: `${lossCR}:1`, sparsityRatio: '38%' };
   }
+
+  // Base CR ramps from 16:1 (s=1) up to ~80:1 (s=64) — a multiplicative curve
+  // so artefacts and CR scale together as the user expects.
+  const baseCR = 16 + Math.pow(s / 64, 0.85) * 64;
+  const cr = (baseCR * typeBonus).toFixed(1);
+
   if (t.method === 'jpeg2000') {
-    const lvlBonus = (t.decompositionLevel - 1) * 0.4;
-    const wBonus = t.waveletFilter === 'db4' ? 1.2 : t.waveletFilter === 'db2' ? 0.6 : 0;
-    const psnr = Math.max(22, 38.5 - (s / 32) * 16 + lvlBonus + wBonus);
-    const mse  = Math.max(3, (s * s) / (255 * 0.6 + s));
-    const cr   = (5 + (s / 4) * 2.1).toFixed(1);
-    const sp   = Math.min(95, 55 + s * 1.2).toFixed(0);
+    const lvlBonus = (t.decompositionLevel - 1) * 0.6;
+    const wBonus = t.waveletFilter === 'db4' ? 1.6 : t.waveletFilter === 'db2' ? 0.8 : 0;
+    const psnr = Math.max(16, 40 - (s / 32) * 22 + lvlBonus + wBonus);
+    const mse  = Math.max(2, Math.pow(s, 1.7) / 32);
+    const sp   = Math.min(96, 55 + s * 1.2).toFixed(0);
     return { mse: +mse.toFixed(2), psnr: +psnr.toFixed(2), compressionRatio: `${cr}:1`, sparsityRatio: `${sp}%` };
   } else {
-    const psnr = Math.max(20, 36.5 - (s / 32) * 14);
-    const mse  = Math.max(5, (s * s) / (255 * 0.5 + s));
-    const cr   = (4 + (s / 4) * 1.8).toFixed(1);
-    const sp   = Math.min(88, 45 + s * 1.0).toFixed(0);
+    // JPEG/DCT: stronger blocking artefacts → lower PSNR, higher MSE
+    const psnr = Math.max(14, 38 - (s / 32) * 24);
+    const mse  = Math.max(4, Math.pow(s, 1.85) / 26);
+    const sp   = Math.min(90, 48 + s * 1.0).toFixed(0);
     return { mse: +mse.toFixed(2), psnr: +psnr.toFixed(2), compressionRatio: `${cr}:1`, sparsityRatio: `${sp}%` };
   }
 }
@@ -98,7 +118,7 @@ export function ProcessingPage() {
         setCurrentStep(idx);
         if (idx === PIPELINE_STAGES.length - 1) {
           setTimeout(() => {
-            const r = computeResults(transform, quant);
+            const r = computeResults(transform, quant, upload.imageType);
             setResults(r);
             setIsRunning(false);
             setIsDone(true);

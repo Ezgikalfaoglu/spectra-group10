@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { PipelineStepper } from '../components/PipelineStepper';
 import { DWTSubbandsViz } from '../components/DWTSubbandsViz';
+import { DCTBlockPanel } from '../components/DCTBlockPanel';
+import { TypePresetBanner } from '../components/TypePresetBanner';
 
 interface TransformSettings {
   method: 'jpeg' | 'jpeg2000';
@@ -169,6 +171,16 @@ export function TransformPage() {
           </p>
         </motion.div>
       )}
+
+      <TypePresetBanner
+        stage="transform"
+        onApply={(p) => setSettings(s => ({
+          ...s,
+          method: p.method,
+          waveletFilter: p.waveletFilter,
+          decompositionLevel: p.decompositionLevel,
+        }))}
+      />
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, alignItems: 'start' }}>
 
@@ -413,32 +425,9 @@ export function TransformPage() {
                 className="sp-card" style={{ overflow: 'hidden' }}
               >
                 <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--rule)' }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.22em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>DCT BLOCK STRUCTURE</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.22em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>DCT · 8 × 8 BLOCK</span>
                 </div>
-                <div style={{ padding: 24 }}>
-                  <div style={{ marginBottom: 20 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 3, maxWidth: 240, margin: '0 auto 16px' }}>
-                      {Array.from({ length: 36 }).map((_, i) => (
-                        <div key={i} style={{ aspectRatio: '1', borderRadius: 2, background: i === 0 ? 'var(--klein)' : `rgba(30,42,255,${0.06 + (i % 7) * 0.015})`, border: '1px solid var(--rule-soft)' }} />
-                      ))}
-                    </div>
-                    <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--ink-4)', textAlign: 'center', letterSpacing: '0.1em', textTransform: 'uppercase' }}>8×8 Pixel Blocks → DCT Coefficients</p>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {[
-                      { label: 'Block Size', value: '8 × 8 px' },
-                      { label: 'Transform', value: 'Discrete Cosine Transform' },
-                      { label: 'Basis Functions', value: '64 cosine functions' },
-                      { label: 'DC Component', value: 'Average block value' },
-                      { label: 'AC Components', value: 'High-frequency details' },
-                    ].map(row => (
-                      <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 8, borderBottom: '1px solid var(--rule-soft)' }}>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.12em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>{row.label}</span>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--plum)' }}>{row.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <DCTBlockPanel />
               </motion.div>
             )}
           </AnimatePresence>

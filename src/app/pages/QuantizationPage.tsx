@@ -22,6 +22,7 @@ import {
 import { Switch } from '@/app/components/ui/switch';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/app/components/ui/collapsible';
 import { PipelineStepper } from '../components/PipelineStepper';
+import { TypePresetBanner } from '../components/TypePresetBanner';
 
 interface QuantizationSettings {
   quantizationType: 'uniform' | 'scalar';
@@ -41,11 +42,12 @@ const DEFAULT_TRANSFORM: StoredTransform = {
   decompositionLevel: 3,
 };
 
-/* Task-specific mock estimates */
+/* Task-specific mock estimates — CR floor is 16:1, PSNR drops hard at large Δ */
 function estimateMetrics(stepSize: number, lossless: boolean) {
-  if (lossless) return { psnr: '∞', cr: '1:1' };
-  const estPSNR = Math.max(20, 42 - stepSize * 0.35).toFixed(1);
-  const estCR = `${(1 + stepSize * 0.14).toFixed(1)}:1`;
+  if (lossless) return { psnr: '∞', cr: '2.4:1' };
+  const estPSNR = Math.max(16, 40 - stepSize * 0.45).toFixed(1);
+  const baseCR = 16 + Math.pow(stepSize / 64, 0.85) * 64;
+  const estCR = `${baseCR.toFixed(1)}:1`;
   return {
     psnr: estPSNR,
     cr: estCR,
@@ -155,6 +157,16 @@ export function QuantizationPage() {
           Quantization reduces coefficient precision — the step size controls the quality-to-size trade-off
         </p>
       </div>
+
+      <TypePresetBanner
+        stage="quantize"
+        onApply={(p) => setSettings(s => ({
+          ...s,
+          quantizationType: p.quantizationType,
+          stepSize: p.stepSize,
+          lossless: p.forceLossless || s.lossless,
+        }))}
+      />
 
       {/* Guard */}
       {isHydrated && !transform && (
