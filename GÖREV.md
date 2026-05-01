@@ -1,95 +1,200 @@
-# 👋 Fatmanur — Senin Branch'in: `feature/transform-fatmanur`
+# 👋 Ayşe Berfin — `feature/quantization-berfin`
 
-## GitHub Codespaces ile Aç (Tavsiye Edilen — kurulum gerektirmez)
+> **İterasyon 2** — Hoca geri bildirimleri sonrası
+> Genel proje haritası: `TASKS_V2.md` (main'de)
 
-1. `github.com/Ezgikalfaoglu/spectra-group10` → branch olarak **`feature/transform-fatmanur`** seç
-2. Yeşil **`<> Code`** butonu → **Codespaces** sekmesi → **Create codespace on feature/transform-fatmanur**
-3. Tarayıcıda VS Code açılır, terminale yaz:
+## 📋 Senin sorumluluğun
+
+Bu iterasyonda **2 sayfa** sende:
+- ✅ `/quantization` — Senin orijinal sayfan
+- 🆕 `/entropy` — **YENİ sayfa**, sahibi sensin (quantization'dan hemen sonra geliyor)
+
+> ⚠️ **Hoca'nın özel ricası:** "CR (compression ratio) çok küçük, **minimum 16 olsun**, yükseldikçe görsel bozulma da artsın." → Formül zaten güncellendi (`baseCR = 16 + (s/64)^0.85 × 64`). Sen UI tarafını cilala.
+
+---
+
+## 🚀 1. Ortamı kur
+
+### GitHub Codespaces (tavsiye)
+1. https://github.com/Ezgikalfaoglu/spectra-group10 → **`<> Code`** → **Codespaces** → **Create codespace on `feature/quantization-berfin`**
+2. Terminal:
 ```bash
+nvm use 20
+git pull
 npm install
 npm run dev
 ```
-4. Açılan port linkine tıkla → `http://localhost:3000/transform` canlı görünür
 
-## Yerel Çalıştırma (isteğe bağlı)
+### Yerel
 ```bash
 git clone https://github.com/Ezgikalfaoglu/spectra-group10.git
 cd spectra-group10
-git checkout feature/transform-fatmanur
+git checkout feature/quantization-berfin
+git pull
+nvm use 20
 npm install
 npm run dev
-# Tarayıcı: http://localhost:3000/transform
 ```
+
+> ❗ `crypto$2.getRandomValues` hatası → `nvm use 20`
 
 ---
 
-## Senin Dosyan
-```
-src/app/pages/TransformPage.tsx   ← SADECE BU DOSYAYA DOKUNUYORSUN
-```
+## 🎯 2. Yapacakların
 
-## Yapman Gerekenler
+### Görev A — Quantization sayfasında live matrix preview ekle
 
-### 1. Yöntem Seçici (Segmented Control)
-- İki buton yan yana: **"JPEG (DCT)"** | **"J2K (DWT)"**
-- `sp-seg` / `sp-seg-btn` / `sp-seg-btn-active` class'larını kullan
-- Seçim değişince `AnimatePresence` ile alt seçenekler animasyonlu açılır/kapanır
+**Dosya:** `src/app/pages/QuantizationPage.tsx`
 
-### 2. Wavelet Filtre Seçimi *(sadece J2K seçilince görünür)*
-Üç pill buton:
-- `Haar` · `db2` · `db4`
-- `sp-pill` class; seçili → `sp-pill-active` (klein mavi)
+Sağdaki "Estimated Output" kartının altına yeni bir kart ekle: **Quantization Effect Preview**.
 
-### 3. Ayrışım Seviyesi *(sadece J2K seçilince görünür)*
-- 1'den 5'e pill butonlar yan yana
-- Seçilen seviye değişince `DWTSubbandsViz` bileşeni canlı güncellenir
-- Geçişte animasyon ekle (`motion`)
+Fatmanur'un `DCTBlockPanel` bileşenini kullan ama prop ile `delta = settings.stepSize` gönder. Böylece slider'ı oynatınca matriste **HF hücrelerin sıfıra düştüğü** canlı görünür. Hoca'ya quantization'ın matematiksel etkisini göster.
 
-### 4. DWT Alt-Bant Görselleştirmesi
-- `DWTSubbandsViz` bileşenini import et ve kullan:
 ```tsx
-import { DWTSubbandsViz } from '../components/DWTSubbandsViz';
-<DWTSubbandsViz level={decompositionLevel} />
+import { DCTBlockPanel } from '../components/DCTBlockPanel';
+
+// JSX'te:
+<div className="sp-card" style={{ overflow: 'hidden' }}>
+  <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--rule)' }}>
+    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.22em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>
+      QUANTIZATION EFFECT · LIVE
+    </span>
+  </div>
+  <DCTBlockPanel delta={settings.stepSize} />
+</div>
 ```
-- Seviye değişince bileşen animasyonlu geçiş yapsın
 
-### 5. Seçim Özet Kartı
-- Seçilen metot + tüm parametreleri `paper-2` arka planlı kart içinde göster
-- Font: `font-mono`, renk: `var(--ink-3)` label · `var(--ink)` değer
+**Not:** `DCTBlockPanel`'in şu an `delta` prop'u yok. Fatmanur eklediğinde sen kullanacaksın. Bu görev **ona bağımlı** — önce Fatmanur ile koordine et veya sen bir override yap (`DCTBlockPanel` source'unu local'de kopyala, prop ekle).
 
-### 6. Geri / İleri Navigasyon
-- `sp-btn sp-btn-ghost` → ← `/upload`
-- `sp-btn sp-btn-klein` → `/quantization` →
-- `localStorage["spectra_transform"]`'a kaydet sonra ileri git
+### Görev B — Lossless durumunu daha belirgin yap
 
-### 7. Demo Modu
-- `localStorage["spectra_upload"]` boşsa varsayılan değerlerle başlat
-- Küçük "Demo modu" badge göster
+**Dosya:** `src/app/pages/QuantizationPage.tsx`
+
+Lossless toggle açıkken:
+- Step size slider grileşsin (zaten var, ama opacity 0.5 → 0.3 yap)
+- Quality scale gradient'ında handle'ı **leaf yeşili** yap, "LOSSLESS" yazısı çıksın
+- "Quality preview" sayılarını "∞ dB" / "2.4:1" yerine animasyonlu serif ital yazıyla göster
+
+### Görev C — `/entropy` sayfasını sahiplen ve genişlet
+
+**Dosya:** `src/app/pages/EntropyPage.tsx`
+
+**Şu an:** Coder seçici (3 seçenek) + canlı bpp/CR kart + sembol frekans bar chart. Pre-coder Options bölümü kaldırıldı.
+
+**Eklenecek 4 şey:**
+
+#### C.1 — TypePresetBanner ekle (sayfanın üstüne)
+```tsx
+import { TypePresetBanner } from '../components/TypePresetBanner';
+
+<TypePresetBanner
+  stage="entropy"
+  onApply={(p) => setSettings(s => ({ ...s, coder: p.coder }))}
+/>
+```
+
+#### C.2 — Bar chart rengini coder'a göre değiştir
+Şu an mavi gradyan. Seçili coder'a göre:
+- Default Huffman → klein
+- Custom Huffman → leaf
+- Arithmetic → plum
+
+```tsx
+const coderColor = {
+  'huffman-default': 'var(--klein)',
+  'huffman-custom':  'var(--leaf)',
+  'arithmetic':      'var(--plum)',
+}[settings.coder];
+
+// Bar style:
+background: `linear-gradient(180deg, ${coderColor} 0%, ${coderColor}66 100%)`,
+```
+
+#### C.3 — Estimated bitstream size kartı
+Sağ panele yeni bir alt-kart: **estimated payload in KB**.
+
+```tsx
+// Mock: 1024×1024 image
+const estimatedKB = Math.round((1024 * 1024 * bpp) / (8 * 1024));
+
+<div style={{ marginTop: 14, padding: '14px 16px', background: 'var(--paper-2)', border: '1px solid var(--rule)', borderRadius: 'var(--r-md)' }}>
+  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.18em', color: 'var(--ink-3)', textTransform: 'uppercase', marginBottom: 6 }}>
+    Estimated Bitstream
+  </div>
+  <div style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 28, color: 'var(--ink)' }}>
+    {estimatedKB}<span style={{ fontFamily: 'var(--font-mono)', fontStyle: 'normal', fontSize: 11, color: 'var(--klein)', marginLeft: 6 }}>KB</span>
+  </div>
+  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--ink-4)', marginTop: 4 }}>
+    1024 × 1024 · {bpp} bpp
+  </div>
+</div>
+```
+
+#### C.4 — Coder formula card
+Sayfa altına küçük bir bilgi kartı: **"Why these matter"**.
+
+```
+Default Huffman   ─ static tables, no per-image overhead, 5-10% over arithmetic
+Custom Huffman    ─ optimized for this specimen, 4-32 byte table overhead
+Arithmetic        ─ continuous fraction encoding, theoretical optimum
+```
 
 ---
 
-## Renk & Stil Referansı
-```css
-var(--klein)     /* #1E2AFF — seçili state */
-var(--paper-2)   /* kart arka planı */
-var(--rule)      /* hairline border */
-var(--font-mono) /* sayılar ve label'lar */
-var(--cyan)      /* #00D4FF — sadece aktif/canlı state */
-```
+## 🧪 3. Test et
 
-## localStorage Çıktın
-```js
-localStorage.setItem("spectra_transform", JSON.stringify({
-  method: "jpeg2000",        // "jpeg" | "jpeg2000"
-  waveletFilter: "db4",      // "haar" | "db2" | "db4"
-  decompositionLevel: 3      // 1-5
-}))
-```
-
-## Commit & Push
 ```bash
-git add src/app/pages/TransformPage.tsx
-git commit -m "feat(transform): yöntem seçici ve DWT vizualizasyonu"
-git push
+npm run dev
 ```
-Bitince GitHub'da **Pull Request** aç → Ezgi review yapar.
+
+Test senaryosu:
+1. `/quantization` → Δ slider'ı 1'den 64'e oynat
+   - **CR önizlemesi her zaman ≥ 16:1** (kontrol et!)
+   - Δ=64'te PSNR < 18 dB
+   - Lossless aç → CR ≈ 2.4:1, PSNR = ∞
+2. `/entropy` → coder değiştir
+   - bar chart rengi değişiyor mu?
+   - Estimated KB güncelleniyor mu?
+3. Pipeline akışı: `/quantization` → "Next: Entropy" → `/entropy` → "Next: Process" → `/processing` (otomatik geçiş)
+4. TypePresetBanner: AI Generated tipinde "Apply preset" → coder = Custom Huffman olmalı
+
+Build:
+```bash
+npx tsc --noEmit
+npm run build
+```
+
+---
+
+## 📤 4. Commit & push
+
+```bash
+git add src/app/pages/QuantizationPage.tsx src/app/pages/EntropyPage.tsx
+git commit -m "feat(quantize+entropy): live matrix preview, color-coded bars, payload estimate"
+git push origin feature/quantization-berfin
+```
+
+PR aç: `feature/quantization-berfin` → `main`
+
+---
+
+## 🆘 Takıldığında
+
+- **CR < 16 hesaplıyorsa formül senin değişmiş demektir** — `estimateMetrics` fonksiyonunu kontrol et:
+  ```ts
+  const baseCR = 16 + Math.pow(stepSize / 64, 0.85) * 64;
+  ```
+- **DCTBlockPanel `delta` prop'u yok diyor:** Fatmanur'un ekran ekran cevabını bekle veya sen bir kopyasını al
+- **TypePresetBanner sayfada görünmüyor:** localStorage'da `spectra_upload` boş → önce Upload'da görsel yükle
+
+---
+
+## 📚 Yararlı dosyalar
+
+- `src/app/pages/QuantizationPage.tsx` — senin orijinal sayfan
+- `src/app/pages/EntropyPage.tsx` — yeni, senin sayfan
+- `src/app/lib/imageTypeProfiles.ts` — sadece okuma
+- `src/app/components/TypePresetBanner.tsx` — hazır
+- `TASKS_V2.md` — ekip roadmap'i
+
+İyi çalışmalar! 📊
