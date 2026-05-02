@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!--
+    Synthetic specimen — computer-generated technical diagram.
+    Hard edges, solid flat colors, crisp grid lines.
+    High-frequency transitions → JPEG block artifacts at Δ > 12.
+    Arithmetic coder outperforms Huffman on this type.
+  -->
+
+  <!-- Background -->
+  <rect width="512" height="512" fill="#f8f8f6"/>
+
+  <!-- Grid lines — crisp, regular -->
+  <g stroke="#d8d8d2" stroke-width="0.8" fill="none">
+    <line x1="72"  y1="40"  x2="72"  y2="430"/>
+    <line x1="142" y1="40"  x2="142" y2="430"/>
+    <line x1="212" y1="40"  x2="212" y2="430"/>
+    <line x1="282" y1="40"  x2="282" y2="430"/>
+    <line x1="352" y1="40"  x2="352" y2="430"/>
+    <line x1="422" y1="40"  x2="422" y2="430"/>
+    <line x1="60"  y1="80"  x2="470" y2="80"/>
+    <line x1="60"  y1="150" x2="470" y2="150"/>
+    <line x1="60"  y1="220" x2="470" y2="220"/>
+    <line x1="60"  y1="290" x2="470" y2="290"/>
+    <line x1="60"  y1="360" x2="470" y2="360"/>
+  </g>
+
+  <!-- Axes -->
+  <line x1="72" y1="430" x2="460" y2="430" stroke="#1a1a1a" stroke-width="2"/>
+  <line x1="72" y1="40"  x2="72"  y2="430" stroke="#1a1a1a" stroke-width="2"/>
+
+  <!-- Axis arrows -->
+  <polygon points="460,425 472,430 460,435" fill="#1a1a1a"/>
+  <polygon points="67,40 72,28 77,40"       fill="#1a1a1a"/>
+
+  <!-- Bar set 1 — Natural (blue) -->
+  <rect x="88"  y="148" width="40" height="282" fill="#1e40af"/>
+  <rect x="88"  y="148" width="40" height="282" fill="#2563eb" opacity="0.5"/>
+
+  <!-- Bar set 2 — AI Generated (purple) -->
+  <rect x="158" y="108" width="40" height="322" fill="#6d28d9"/>
+  <rect x="158" y="108" width="40" height="322" fill="#8b5cf6" opacity="0.5"/>
+
+  <!-- Bar set 3 — Synthetic (teal) -->
+  <rect x="228" y="190" width="40" height="240" fill="#0e7490"/>
+  <rect x="228" y="190" width="40" height="240" fill="#06b6d4" opacity="0.5"/>
+
+  <!-- Bar set 4 — Fingerprint (amber) -->
+  <rect x="298" y="278" width="40" height="152" fill="#92400e"/>
+  <rect x="298" y="278" width="40" height="152" fill="#f59e0b" opacity="0.5"/>
+
+  <!-- Bar set 5 — Biomedical (red) -->
+  <rect x="368" y="248" width="40" height="182" fill="#991b1b"/>
+  <rect x="368" y="248" width="40" height="182" fill="#ef4444" opacity="0.5"/>
+
+  <!-- Value labels on bars -->
+  <g font-family="monospace" font-size="12" fill="#1a1a1a" text-anchor="middle">
+    <text x="108" y="140">24:1</text>
+    <text x="178" y="100">26:1</text>
+    <text x="248" y="182">22:1</text>
+    <text x="318" y="270">16:1</text>
+    <text x="388" y="240">17:1</text>
+  </g>
+
+  <!-- X-axis labels -->
+  <g font-family="monospace" font-size="10" fill="#444444" text-anchor="middle">
+    <text x="108" y="450">Natural</text>
+    <text x="178" y="450">AI Gen</text>
+    <text x="248" y="450">Synth</text>
+    <text x="318" y="450">Finger</text>
+    <text x="388" y="450">MRI</text>
+  </g>
+
+  <!-- Y-axis ticks and labels -->
+  <g font-family="monospace" font-size="10" fill="#444444" text-anchor="end">
+    <text x="65" y="434">0</text>
+    <text x="65" y="364">5</text>
+    <text x="65" y="294">10</text>
+    <text x="65" y="224">15</text>
+    <text x="65" y="154">20</text>
+    <text x="65" y="84">25</text>
+  </g>
+
+  <!-- Title -->
+  <text x="256" y="22" font-family="monospace" font-size="13" fill="#0a0a0a"
+        text-anchor="middle" font-weight="bold" letter-spacing="1">
+    COMPRESSION RATIO BY IMAGE TYPE
+  </text>
+
+  <!-- Y-axis label -->
+  <text x="18" y="260" font-family="monospace" font-size="10" fill="#444444"
+        text-anchor="middle" transform="rotate(-90 18 260)">
+    CR (× lossless)
+  </text>
+
+  <!-- Legend box -->
+  <rect x="60" y="464" width="395" height="38" rx="4"
+        fill="white" stroke="#d8d8d2" stroke-width="1"/>
+  <g font-family="monospace" font-size="9" fill="#333333">
+    <rect x="72"  y="476" width="10" height="10" fill="#2563eb"/>
+    <text x="86"  y="485">Natural</text>
+    <rect x="138" y="476" width="10" height="10" fill="#8b5cf6"/>
+    <text x="152" y="485">AI Gen</text>
+    <rect x="204" y="476" width="10" height="10" fill="#06b6d4"/>
+    <text x="218" y="485">Synthetic</text>
+    <rect x="286" y="476" width="10" height="10" fill="#f59e0b"/>
+    <text x="300" y="485">Fingerprint</text>
+    <rect x="370" y="476" width="10" height="10" fill="#ef4444"/>
+    <text x="384" y="485">Biomedical</text>
+  </g>
+
+  <!-- Hard-edge annotation lines (diagnostic note, sharp = bad for JPEG) -->
+  <line x1="228" y1="190" x2="200" y2="165" stroke="#0e7490" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="140" y="162" font-family="monospace" font-size="9" fill="#0e7490">sharp edges</text>
+  <text x="140" y="173" font-family="monospace" font-size="9" fill="#0e7490">→ block artefacts</text>
+</svg>

@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!--
+    AI-Generated specimen — same scene as natural.svg but with:
+    · Hyper-smooth gradients (no noise, no grain)
+    · Idealized / symmetric mountain shapes
+    · More saturated, vibrant palette
+    · Perfect mirror reflection
+    These traits produce LOWER entropy → better compression ratio than natural photos.
+  -->
+  <defs>
+    <linearGradient id="ai-sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#0d1f4a"/>
+      <stop offset="28%"  stop-color="#3a5fc0"/>
+      <stop offset="60%"  stop-color="#c0504a"/>
+      <stop offset="82%"  stop-color="#e87030"/>
+      <stop offset="100%" stop-color="#f5c022"/>
+    </linearGradient>
+    <linearGradient id="ai-water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#c0d8f8"/>
+      <stop offset="100%" stop-color="#0d1f4a"/>
+    </linearGradient>
+    <linearGradient id="ai-mtn-far" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#6878c8"/>
+      <stop offset="100%" stop-color="#3040a0"/>
+    </linearGradient>
+    <linearGradient id="ai-mtn-near" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#202862"/>
+      <stop offset="100%" stop-color="#0e1438"/>
+    </linearGradient>
+    <!-- Perfect halo gradient — AI outputs often have unnaturally smooth glows -->
+    <radialGradient id="ai-sun-halo" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"   stop-color="#ffe840" stop-opacity="0.95"/>
+      <stop offset="40%"  stop-color="#ffb820" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#ff8800" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Sky — perfectly smooth, no grain -->
+  <rect width="512" height="345" fill="url(#ai-sky)"/>
+
+  <!-- Stars — evenly spaced, identical brightness (AI pattern) -->
+  <g fill="white" opacity="0.85">
+    <circle cx="51"  cy="32"  r="1.2"/>
+    <circle cx="153" cy="32"  r="1.2"/>
+    <circle cx="256" cy="32"  r="1.2"/>
+    <circle cx="360" cy="32"  r="1.2"/>
+    <circle cx="460" cy="32"  r="1.2"/>
+    <circle cx="102" cy="65"  r="1.0"/>
+    <circle cx="205" cy="65"  r="1.0"/>
+    <circle cx="308" cy="65"  r="1.0"/>
+    <circle cx="410" cy="65"  r="1.0"/>
+  </g>
+
+  <!-- Sun — perfectly symmetric, idealized halo -->
+  <rect x="370" y="198" width="90" height="90" fill="url(#ai-sun-halo)" rx="45"/>
+  <circle cx="415" cy="243" r="16" fill="#ffe840" opacity="0.98"/>
+
+  <!-- Distant mountains — perfectly symmetric, triangular peaks -->
+  <path d="M-8,300 L64,195 L96,220 L128,185 L160,210 L192,170 L256,145 L320,170 L352,210 L384,185 L416,220 L448,195 L520,300 L520,345 L-8,345 Z"
+        fill="url(#ai-mtn-far)"/>
+
+  <!-- Perfect snow on distant peaks — crisp triangles -->
+  <g fill="white" opacity="0.92">
+    <path d="M256,145 L240,168 L272,168 Z"/>
+    <path d="M192,170 L180,190 L204,190 Z"/>
+    <path d="M320,170 L308,190 L332,190 Z"/>
+    <path d="M128,185 L118,202 L138,202 Z"/>
+    <path d="M384,185 L374,202 L394,202 Z"/>
+  </g>
+
+  <!-- Near mountain range — perfectly symmetric, idealized -->
+  <path d="M-8,342 L48,248 L96,280 L144,218 L192,258 L240,208 L288,258 L336,218 L384,280 L432,248 L520,342 L520,400 L-8,400 Z"
+        fill="url(#ai-mtn-near)"/>
+
+  <!-- Perfect snow near -->
+  <g fill="white" opacity="0.96">
+    <path d="M144,218 L132,238 L156,238 Z"/>
+    <path d="M240,208 L228,232 L252,232 Z"/>
+    <path d="M336,218 L324,238 L348,238 Z"/>
+  </g>
+
+  <!-- Lake — perfectly flat, mirror-perfect reflection -->
+  <rect x="0" y="370" width="512" height="142" fill="url(#ai-water)"/>
+
+  <!-- Perfect mirror reflection — exact symmetric copy -->
+  <path d="M-8,430 L48,480 L96,450 L144,490 L192,462 L240,500 L288,462 L336,490 L384,450 L432,480 L520,430 L520,512 L-8,512 Z"
+        fill="#0d1f4a" opacity="0.65"/>
+
+  <!-- Perfect reflection ripples — evenly spaced, too uniform (AI artifact) -->
+  <g stroke="#5090d8" stroke-width="0.8" fill="none" opacity="0.50">
+    <line x1="0" y1="388" x2="512" y2="388"/>
+    <line x1="0" y1="408" x2="512" y2="408"/>
+    <line x1="0" y1="428" x2="512" y2="428"/>
+    <line x1="0" y1="448" x2="512" y2="448"/>
+    <line x1="0" y1="468" x2="512" y2="468"/>
+  </g>
+
+  <!-- Ground strip -->
+  <rect x="0" y="394" width="512" height="6" fill="#0a1028" opacity="0.9"/>
+
+  <!-- Forest — perfectly identical, evenly spaced (AI pattern) -->
+  <g fill="#101840">
+    <path d="M10,400  L22,362 L34,400 Z"/>
+    <path d="M46,400  L58,362 L70,400 Z"/>
+    <path d="M82,400  L94,362 L106,400 Z"/>
+    <path d="M118,400 L130,362 L142,400 Z"/>
+    <path d="M154,400 L166,362 L178,400 Z"/>
+  </g>
+  <g fill="#101840">
+    <path d="M334,400 L346,362 L358,400 Z"/>
+    <path d="M370,400 L382,362 L394,400 Z"/>
+    <path d="M406,400 L418,362 L430,400 Z"/>
+    <path d="M442,400 L454,362 L466,400 Z"/>
+    <path d="M478,400 L490,362 L502,400 Z"/>
+  </g>
+
+  <!-- Lens flare — common AI generation artifact -->
+  <g opacity="0.20">
+    <circle cx="340" cy="185" r="18" fill="white"/>
+    <circle cx="325" cy="200" r="8"  fill="white"/>
+    <circle cx="355" cy="170" r="5"  fill="white"/>
+  </g>
+
+  <!-- Color grading overlay — hyper-saturated warm tint (AI style) -->
+  <rect width="512" height="512" fill="#ff6020" opacity="0.04"/>
+</svg>
