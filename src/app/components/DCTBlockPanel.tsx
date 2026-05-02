@@ -36,6 +36,11 @@ const DCT: number[][] = [
 
 const MAX_DCT_ABS = 415;
 
+function quantizeDct(delta: number) {
+  const safeDelta = Math.max(1, delta);
+  return DCT.map((row) => row.map((v) => Math.round(v / safeDelta)));
+}
+
 function pixelBg(v: number) {
   const c = v;
   return `rgb(${c}, ${c}, ${c})`;
@@ -56,7 +61,12 @@ function dctTextColor(v: number) {
   return 'var(--ink-1)';
 }
 
-export function DCTBlockPanel() {
+export function DCTBlockPanel({ delta = 1 }: { delta?: number }) {
+  const quantized = quantizeDct(delta);
+  const zeroCount = quantized.flat().filter((v) => v === 0).length;
+  const zeroPct = Math.round((zeroCount / 64) * 100);
+  const isQuantizedView = delta > 1;
+
   return (
     <div style={{ padding: 22 }}>
 
@@ -125,9 +135,9 @@ export function DCTBlockPanel() {
 
         {/* DCT block */}
         <BlockGrid
-          title="DCT coeffs · F(u,v)"
-          subtitle="Frequency · −415..+77"
-          values={DCT}
+          title={isQuantizedView ? 'Quantized coeffs · q(u,v)' : 'DCT coeffs · F(u,v)'}
+          subtitle={isQuantizedView ? `Δ = ${delta} · ${zeroPct}% zeros` : 'Frequency · −415..+77'}
+          values={isQuantizedView ? quantized : DCT}
           bgFn={dctBg}
           textFn={dctTextColor}
           accent="var(--klein)"

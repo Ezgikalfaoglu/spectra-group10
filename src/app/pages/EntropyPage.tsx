@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
 import { Code2, ArrowRight, Info } from 'lucide-react';
 import { PipelineStepper } from '../components/PipelineStepper';
+import { TypePresetBanner } from '../components/TypePresetBanner';
 
 interface EntropySettings {
   coder: 'huffman-default' | 'huffman-custom' | 'arithmetic';
@@ -16,6 +17,12 @@ interface EntropySettings {
 const DEFAULTS: EntropySettings = {
   coder: 'huffman-default',
 };
+
+const CODER_IDS = ['huffman-default', 'huffman-custom', 'arithmetic'] as const;
+
+function isCoder(value: unknown): value is EntropySettings['coder'] {
+  return typeof value === 'string' && (CODER_IDS as readonly string[]).includes(value);
+}
 
 const CODERS: { id: EntropySettings['coder']; label: string; sub: string; desc: string }[] = [
   { id: 'huffman-default', label: 'Huffman · default tables', sub: 'JPEG-standard',
@@ -40,7 +47,12 @@ export function EntropyPage() {
   useEffect(() => {
     const saved = localStorage.getItem('spectra_entropy');
     if (saved) {
-      try { setSettings({ ...DEFAULTS, ...JSON.parse(saved) }); } catch {}
+      try {
+        const parsed = JSON.parse(saved);
+        setSettings({
+          coder: isCoder(parsed?.coder) ? parsed.coder : DEFAULTS.coder,
+        });
+      } catch {}
     }
   }, []);
 
@@ -54,6 +66,12 @@ export function EntropyPage() {
 
   const bpp = estimateBitRate(settings.coder);
   const cr = (8 / bpp).toFixed(1);
+  const estimatedKB = Math.round((1024 * 1024 * bpp) / (8 * 1024));
+  const coderBarGradient = {
+    'huffman-default': 'linear-gradient(180deg, var(--klein) 0%, rgba(30,42,255,0.4) 100%)',
+    'huffman-custom': 'linear-gradient(180deg, var(--leaf) 0%, rgba(31,138,94,0.4) 100%)',
+    arithmetic: 'linear-gradient(180deg, var(--plum) 0%, rgba(75,30,122,0.4) 100%)',
+  }[settings.coder] ?? 'linear-gradient(180deg, var(--klein) 0%, rgba(30,42,255,0.4) 100%)';
 
   return (
     <motion.div
@@ -81,6 +99,11 @@ export function EntropyPage() {
           Lossless symbol coding to pack quantized coefficients into the final bitstream
         </p>
       </div>
+
+      <TypePresetBanner
+        stage="entropy"
+        onApply={(p) => setSettings(s => ({ ...s, coder: p.coder }))}
+      />
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, alignItems: 'start' }}>
 
@@ -177,6 +200,19 @@ export function EntropyPage() {
                 </div>
               </div>
 
+              <div style={{ marginBottom: 20, padding: '14px 16px', background: 'var(--paper-2)', border: '1px solid var(--rule)', borderRadius: 'var(--r-md)' }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.18em', color: 'var(--ink-3)', textTransform: 'uppercase', marginBottom: 6 }}>
+                  Estimated Bitstream
+                </div>
+                <div style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 28, color: 'var(--ink)' }}>
+                  {estimatedKB}
+                  <span style={{ fontFamily: 'var(--font-mono)', fontStyle: 'normal', fontSize: 11, color: 'var(--klein)', marginLeft: 6 }}>KB</span>
+                </div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--ink-4)', marginTop: 4 }}>
+                  1024 × 1024 · {bpp} bpp
+                </div>
+              </div>
+
               {/* Symbol distribution mini bar chart */}
               <div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.12em', color: 'var(--ink-3)', textTransform: 'uppercase', marginBottom: 10 }}>
@@ -186,7 +222,7 @@ export function EntropyPage() {
                   {[88, 64, 42, 28, 18, 12, 8, 5, 3, 2, 1].map((h, i) => (
                     <div key={i} style={{
                       flex: 1, height: `${h}%`,
-                      background: `linear-gradient(180deg, var(--klein) 0%, rgba(30,42,255,0.4) 100%)`,
+                      background: coderBarGradient,
                       borderRadius: '2px 2px 0 0', opacity: 0.3 + (h / 100) * 0.7,
                     }} />
                   ))}
@@ -201,12 +237,36 @@ export function EntropyPage() {
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '14px 18px', background: 'rgba(30,42,255,0.04)', border: '1px solid rgba(30,42,255,0.12)', borderRadius: 'var(--r-md)' }}>
-            <Info style={{ width: 13, height: 13, color: 'var(--klein)', marginTop: 1, flexShrink: 0 }} />
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--ink-2)', lineHeight: 1.6, letterSpacing: '0.02em' }}>
-              Entropy coding is lossless — it cannot reduce quality, only redundancy. Custom Huffman saves a few
-              percent on text-heavy or synthetic specimens; arithmetic is best for high-entropy natural images.
-            </p>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16, alignItems: 'start' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '14px 18px', background: 'rgba(30,42,255,0.04)', border: '1px solid rgba(30,42,255,0.12)', borderRadius: 'var(--r-md)' }}>
+          <Info style={{ width: 13, height: 13, color: 'var(--klein)', marginTop: 1, flexShrink: 0 }} />
+          <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--ink-2)', lineHeight: 1.6, letterSpacing: '0.02em' }}>
+            Entropy coding is lossless — it cannot reduce quality, only redundancy. Custom Huffman saves a few
+            percent on text-heavy or synthetic specimens; arithmetic is best for high-entropy natural images.
+          </p>
+        </div>
+
+        <div className="sp-card" style={{ overflow: 'hidden' }}>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--rule)', background: 'var(--paper-2)' }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.16em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>
+              Why These Matter
+            </span>
+          </div>
+          <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[
+              { k: 'Default Huffman', v: 'static tables, no per-image overhead, usually 5-10% over arithmetic' },
+              { k: 'Custom Huffman', v: 'optimized for this specimen, adds 4-32 byte table overhead' },
+              { k: 'Arithmetic', v: 'continuous fraction encoding with near-theoretical entropy limit' },
+            ].map((row) => (
+              <div key={row.k} style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontFamily: 'var(--font-mono)', fontSize: 10.5, lineHeight: 1.55, color: 'var(--ink-2)' }}>
+                <span style={{ color: 'var(--ink)', minWidth: 114 }}>{row.k}</span>
+                <span style={{ color: 'var(--ink-4)' }}>-</span>
+                <span>{row.v}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
