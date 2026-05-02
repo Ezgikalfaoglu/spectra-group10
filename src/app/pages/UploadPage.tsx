@@ -1086,6 +1086,7 @@ export function UploadPage() {
           </div>
         </div>
       </div>
+
     </motion.div>
   );
 }
