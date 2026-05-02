@@ -23,6 +23,7 @@ import { Switch } from '@/app/components/ui/switch';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/app/components/ui/collapsible';
 import { PipelineStepper } from '../components/PipelineStepper';
 import { TypePresetBanner } from '../components/TypePresetBanner';
+import { DCTBlockPanel } from '../components/DCTBlockPanel';
 
 interface QuantizationSettings {
   quantizationType: 'uniform' | 'scalar';
@@ -72,7 +73,7 @@ export function QuantizationPage() {
     if (upload) {
       try {
         const u = JSON.parse(upload);
-        const forced = ['fingerprint', 'biomedical'].includes(u.imageType || '');
+        const forced = ['fingerprint', 'biomedical'].includes(String(u.imageType || '').toLowerCase());
         forcedLossless = forced;
         setIsLosslessForced(forced);
       } catch {}
@@ -130,6 +131,9 @@ export function QuantizationPage() {
           ? 'High compression'
           : 'Maximum compression';
   const controlsDisabled = settings.lossless;
+  const qualityScaleLeft = settings.lossless
+    ? 4
+    : Math.min(95, (settings.stepSize / 64) * 100);
 
   return (
     <motion.div
@@ -235,7 +239,7 @@ export function QuantizationPage() {
           </div>
 
           {/* Step size — disabled in lossless */}
-          <div className="sp-card" style={{ overflow: 'hidden', opacity: controlsDisabled ? 0.5 : 1, transition: 'opacity 0.2s' }}>
+          <div className="sp-card" style={{ overflow: 'hidden', opacity: controlsDisabled ? 0.3 : 1, transition: 'opacity 0.2s' }}>
                   <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--rule)', display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(30,42,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <SlidersHorizontal style={{ width: 14, height: 14, color: 'var(--klein)' }} />
@@ -370,39 +374,72 @@ export function QuantizationPage() {
                 <div style={{ textAlign: 'center', padding: '16px 12px', background: 'white', border: '1px solid var(--rule)', borderRadius: 'var(--r-md)', position: 'relative', overflow: 'hidden' }}>
                   <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: psnrColor }} />
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.2em', color: 'var(--ink-4)', textTransform: 'uppercase', marginBottom: 8 }}>PSNR</div>
-                  <div style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 30, color: psnrColor, lineHeight: 1 }}>
-                    {metrics.psnr}
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, marginLeft: 6 }}>dB</span>
-                  </div>
+                  {settings.lossless ? (
+                    <motion.div
+                      animate={{ opacity: [0.72, 1, 0.72], scale: [0.98, 1.02, 0.98] }}
+                      transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+                      style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 32, color: 'var(--leaf)', lineHeight: 1 }}
+                    >
+                      ∞
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, marginLeft: 6, fontStyle: 'normal' }}>dB</span>
+                    </motion.div>
+                  ) : (
+                    <div style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 30, color: psnrColor, lineHeight: 1 }}>
+                      {metrics.psnr}
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, marginLeft: 6 }}>dB</span>
+                    </div>
+                  )}
                 </div>
                 <div style={{ textAlign: 'center', padding: '16px 12px', background: 'white', border: '1px solid var(--rule)', borderRadius: 'var(--r-md)', position: 'relative', overflow: 'hidden' }}>
-                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'var(--klein)' }} />
+                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: settings.lossless ? 'var(--leaf)' : 'var(--klein)' }} />
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.2em', color: 'var(--ink-4)', textTransform: 'uppercase', marginBottom: 8 }}>CR</div>
-                  <div style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 30, color: 'var(--ink)', lineHeight: 1 }}>
-                    {metrics.cr}
-                  </div>
+                  {settings.lossless ? (
+                    <motion.div
+                      animate={{ opacity: [0.72, 1, 0.72], scale: [0.98, 1.02, 0.98] }}
+                      transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+                      style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 32, color: 'var(--leaf)', lineHeight: 1 }}
+                    >
+                      2.4:1
+                    </motion.div>
+                  ) : (
+                    <div style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 30, color: 'var(--ink)', lineHeight: 1 }}>
+                      {metrics.cr}
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Visual quality scale */}
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.1em', color: 'var(--ink-4)', textTransform: 'uppercase', marginBottom: 8 }}>
-                  <span>Quality ←</span>
+                  <span style={{ color: settings.lossless ? 'var(--leaf)' : 'var(--ink-4)', fontWeight: settings.lossless ? 600 : 400 }}>
+                    {settings.lossless ? 'LOSSLESS' : 'Quality ←'}
+                  </span>
                   <span>→ Compression</span>
                 </div>
                 <div style={{ height: 8, borderRadius: 4, background: 'linear-gradient(90deg, var(--leaf), var(--klein), var(--amber), #d4574c)', position: 'relative', marginBottom: 6 }}>
-                  {!settings.lossless && (
-                    <motion.div
-                      animate={{ left: `${Math.min(95, (settings.stepSize / 64) * 100)}%` }}
-                      transition={{ type: 'spring', stiffness: 200, damping: 25 }}
-                      style={{
-                        position: 'absolute', top: -4, width: 16, height: 16,
-                        borderRadius: '50%', background: 'white',
-                        border: '2px solid var(--ink)', transform: 'translateX(-50%)',
-                        boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
-                      }}
-                    />
-                  )}
+                  <motion.div
+                    animate={{
+                      left: `${qualityScaleLeft}%`,
+                      scale: settings.lossless ? [1, 1.08, 1] : 1,
+                    }}
+                    transition={{
+                      left: { type: 'spring', stiffness: 200, damping: 25 },
+                      scale: settings.lossless
+                        ? { duration: 1.8, repeat: Infinity, ease: 'easeInOut' }
+                        : { duration: 0.2 },
+                    }}
+                    style={{
+                      position: 'absolute', top: -4, width: 16, height: 16,
+                      borderRadius: '50%',
+                      background: settings.lossless ? 'var(--leaf)' : 'white',
+                      border: `2px solid ${settings.lossless ? 'var(--leaf)' : 'var(--ink)'}`,
+                      transform: 'translateX(-50%)',
+                      boxShadow: settings.lossless
+                        ? '0 0 0 4px rgba(45,142,94,0.18), 0 2px 6px rgba(0,0,0,0.16)'
+                        : '0 2px 6px rgba(0,0,0,0.2)',
+                    }}
+                  />
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-4)', letterSpacing: '0.08em' }}>
                   <span>Δ1</span>
@@ -412,6 +449,15 @@ export function QuantizationPage() {
                 </div>
               </div>
             </div>
+          </div>
+
+          <div className="sp-card" style={{ overflow: 'hidden' }}>
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--rule)' }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.22em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>
+                QUANTIZATION EFFECT · LIVE
+              </span>
+            </div>
+            <DCTBlockPanel delta={settings.stepSize} />
           </div>
 
           {/* Pipeline summary */}
@@ -475,6 +521,7 @@ export function QuantizationPage() {
           </Collapsible>
         </div>
       </div>
+
     </motion.div>
   );
 }

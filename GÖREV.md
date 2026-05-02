@@ -1,25 +1,22 @@
-# 👋 Azra — `feature/results-azra`
+# 👋 Ayşe Berfin — `feature/quantization-berfin`
 
 > **İterasyon 2** — Hoca geri bildirimleri sonrası
 > Genel proje haritası: `TASKS_V2.md` (main'de)
 
 ## 📋 Senin sorumluluğun
 
-- ✅ `/results` — Senin sayfan
-- ✅ `/history` — Senin sayfan
-- ✅ `/dashboard` — Senin sayfan
-- ✅ `components/ComparisonSlider.tsx`
+Bu iterasyonda **2 sayfa** sende:
+- ✅ `/quantization` — Senin orijinal sayfan
+- 🆕 `/entropy` — **YENİ sayfa**, sahibi sensin (quantization'dan hemen sonra geliyor)
 
-> ⚠️ **Hoca'nın özel ricaları (senin tarafında en önemlileri):**
-> 1. **CR yüksek olunca görsel BOZULMA görünür olsun** → comparator'da Δ=64 ile bloklu/bulanık görselin net farkı görünmeli
-> 2. **AI / Natural / Fingerprint farkı görsel olarak gösterilebilmeli** → Charts tab'ına yeni bir karşılaştırma eklenecek
+> ⚠️ **Hoca'nın özel ricası:** "CR (compression ratio) çok küçük, **minimum 16 olsun**, yükseldikçe görsel bozulma da artsın." → Formül zaten güncellendi (`baseCR = 16 + (s/64)^0.85 × 64`). Sen UI tarafını cilala.
 
 ---
 
 ## 🚀 1. Ortamı kur
 
 ### GitHub Codespaces (tavsiye)
-1. https://github.com/Ezgikalfaoglu/spectra-group10 → **`<> Code`** → **Codespaces** → **Create codespace on `feature/results-azra`**
+1. https://github.com/Ezgikalfaoglu/spectra-group10 → **`<> Code`** → **Codespaces** → **Create codespace on `feature/quantization-berfin`**
 2. Terminal:
 ```bash
 nvm use 20
@@ -32,7 +29,7 @@ npm run dev
 ```bash
 git clone https://github.com/Ezgikalfaoglu/spectra-group10.git
 cd spectra-group10
-git checkout feature/results-azra
+git checkout feature/quantization-berfin
 git pull
 nvm use 20
 npm install
@@ -45,157 +42,102 @@ npm run dev
 
 ## 🎯 2. Yapacakların
 
-### Görev A — Yüksek CR'da JPEG block artifact göster
+### Görev A — Quantization sayfasında live matrix preview ekle
 
-**Dosya:** `src/app/pages/ResultsPage.tsx`
+**Dosya:** `src/app/pages/QuantizationPage.tsx`
 
-Şu an `reconstructedFilter` sadece `blur + saturate + contrast`. Δ > 40 olunca **JPEG'in 8×8 blok artefaktını simüle eden** bir SVG filter ekle.
+Sağdaki "Estimated Output" kartının altına yeni bir kart ekle: **Quantization Effect Preview**.
 
-#### A.1 — `index.html` veya yeni `BlockArtifactFilter.tsx` bileşenine SVG filter:
-```tsx
-// src/app/components/BlockArtifactFilter.tsx
-export function BlockArtifactFilter() {
-  return (
-    <svg style={{ position: 'absolute', width: 0, height: 0 }} aria-hidden>
-      <defs>
-        <filter id="blockify">
-          <feFlood floodColor="rgba(0,0,0,0.18)"/>
-          <feComposite in2="SourceGraphic" operator="in"/>
-          <feMorphology operator="dilate" radius="4"/>
-          <feComposite in="SourceGraphic" operator="arithmetic" k2="1" k3="0.7"/>
-        </filter>
-        <pattern id="block-grid" width="32" height="32" patternUnits="userSpaceOnUse">
-          <rect width="32" height="32" fill="none" stroke="rgba(0,0,0,0.12)" strokeWidth="0.5"/>
-        </pattern>
-      </defs>
-    </svg>
-  );
-}
-```
-
-#### A.2 — Results'ta `<BlockArtifactFilter />` mount et + filter'ı uygula:
-```tsx
-const stepSize = currentResult.stepSize ?? 18;
-const reconstructedFilter = stepSize > 40
-  ? `blur(3px) contrast(0.75) saturate(0.7) brightness(1.05)`
-  : stepSize > 22
-    ? `blur(2.4px) contrast(0.82) saturate(0.88)`
-    : stepSize > 16
-      ? `blur(1.4px) contrast(0.9) saturate(0.98)`
-      : `blur(0.8px) contrast(0.96) saturate(0.98)`;
-
-// Δ > 40 ise comparator overlay'ine block grid ekle:
-{stepSize > 40 && (
-  <div style={{
-    position: 'absolute', inset: 0, pointerEvents: 'none',
-    backgroundImage: 'linear-gradient(rgba(0,0,0,0.18) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.18) 1px, transparent 1px)',
-    backgroundSize: '32px 32px',
-    mixBlendMode: 'overlay',
-    clipPath: `inset(0 0 0 var(--split, 50%))`,
-  }} />
-)}
-```
-
-Test: Quantization'da Δ=64 yap → Process → Results → comparator'da reconstructed taraf belirgin **bloklu** görünmeli.
-
-### Görev B — Charts tab'ına 5-tip benchmark grafiği
-
-**Dosya:** `src/app/pages/ResultsPage.tsx`
-
-Charts tab'ında mevcut 4 grafiğe ek olarak **5. grafik**: image type bazlı CR/PSNR karşılaştırma.
+Fatmanur'un `DCTBlockPanel` bileşenini kullan ama prop ile `delta = settings.stepSize` gönder. Böylece slider'ı oynatınca matriste **HF hücrelerin sıfıra düştüğü** canlı görünür. Hoca'ya quantization'ın matematiksel etkisini göster.
 
 ```tsx
-import { listProfiles } from '../lib/imageTypeProfiles';
+import { DCTBlockPanel } from '../components/DCTBlockPanel';
 
-const TYPE_BENCHMARK = listProfiles().map(p => ({
-  type: p.label,
-  cr: 16 * p.crBonus + (p.stepSize / 64) * 64,    // mock
-  psnr: p.forceLossless ? 45 : 38 - (p.stepSize / 32) * 16,
-  fill: p.accent,
-}));
-
-// JSX:
-<div className="sp-card" style={{ padding: 24 }}>
-  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-    <Layers style={{ width: 14, height: 14, color: 'var(--klein)' }}/>
-    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.2em', color: 'var(--ink-2)', textTransform: 'uppercase' }}>
-      Image-type Benchmark · trained presets
+// JSX'te:
+<div className="sp-card" style={{ overflow: 'hidden' }}>
+  <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--rule)' }}>
+    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.22em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>
+      QUANTIZATION EFFECT · LIVE
     </span>
   </div>
-  <ResponsiveContainer width="100%" height={260}>
-    <BarChart data={TYPE_BENCHMARK} margin={{ top: 5, right: 10, left: -15, bottom: 5 }}>
-      <CartesianGrid strokeDasharray="3 3" stroke="var(--rule)" vertical={false}/>
-      <XAxis dataKey="type" tick={{ fontSize: 11, fill: 'var(--ink-3)', fontFamily: 'var(--font-mono)' }} stroke="var(--rule)"/>
-      <YAxis tick={{ fontSize: 11, fill: 'var(--ink-3)', fontFamily: 'var(--font-mono)' }} stroke="var(--rule)"/>
-      <Tooltip contentStyle={ttStyle}/>
-      <Bar dataKey="cr" name="CR" radius={[3,3,0,0]}>
-        {TYPE_BENCHMARK.map((d, i) => <Cell key={i} fill={d.fill}/>)}
-      </Bar>
-    </BarChart>
-  </ResponsiveContainer>
+  <DCTBlockPanel delta={settings.stepSize} />
 </div>
 ```
 
-Hoca'ya "biz 5 farklı veri tipiyle test ettik" görüntüsü verir.
+**Not:** `DCTBlockPanel`'in şu an `delta` prop'u yok. Fatmanur eklediğinde sen kullanacaksın. Bu görev **ona bağımlı** — önce Fatmanur ile koordine et veya sen bir override yap (`DCTBlockPanel` source'unu local'de kopyala, prop ekle).
 
-### Görev C — Formula info card
+### Görev B — Lossless durumunu daha belirgin yap
 
-Metric tablosunun yanına küçük bilgi kartı:
+**Dosya:** `src/app/pages/QuantizationPage.tsx`
 
-```
-┌────────────────────────────────────────┐
-│  HOW IS CR COMPUTED?                   │
-│                                        │
-│  CR = uncompressed_size / encoded_size │
-│     = (W × H × 8) / encoded_bits       │
-│                                        │
-│  PSNR = 10 · log₁₀(255² / MSE)         │
-└────────────────────────────────────────┘
-```
+Lossless toggle açıkken:
+- Step size slider grileşsin (zaten var, ama opacity 0.5 → 0.3 yap)
+- Quality scale gradient'ında handle'ı **leaf yeşili** yap, "LOSSLESS" yazısı çıksın
+- "Quality preview" sayılarını "∞ dB" / "2.4:1" yerine animasyonlu serif ital yazıyla göster
 
-### Görev D — History'e tip filter chip'leri
+### Görev C — `/entropy` sayfasını sahiplen ve genişlet
 
-**Dosya:** `src/app/pages/HistoryPage.tsx`
+**Dosya:** `src/app/pages/EntropyPage.tsx`
 
-Mevcut filter input'una ek olarak 5 tip için chip'ler:
+**Şu an:** Coder seçici (3 seçenek) + canlı bpp/CR kart + sembol frekans bar chart. Pre-coder Options bölümü kaldırıldı.
+
+**Eklenecek 4 şey:**
+
+#### C.1 — TypePresetBanner ekle (sayfanın üstüne)
 ```tsx
-import { listProfiles } from '../lib/imageTypeProfiles';
+import { TypePresetBanner } from '../components/TypePresetBanner';
 
-const [typeFilter, setTypeFilter] = useState<string | null>(null);
-const profiles = listProfiles();
+<TypePresetBanner
+  stage="entropy"
+  onApply={(p) => setSettings(s => ({ ...s, coder: p.coder }))}
+/>
+```
 
-<div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-  <button onClick={() => setTypeFilter(null)}
-    className={!typeFilter ? 'sp-pill sp-pill-active' : 'sp-pill'}>
-    All
-  </button>
-  {profiles.map(p => (
-    <button key={p.type}
-      onClick={() => setTypeFilter(p.type)}
-      style={{
-        padding: '5px 11px', borderRadius: 100, cursor: 'pointer',
-        border: `1px solid ${typeFilter === p.type ? p.accent : 'var(--rule)'}`,
-        background: typeFilter === p.type ? `${p.accent}11` : 'white',
-        color: typeFilter === p.type ? p.accent : 'var(--ink-3)',
-        fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.08em',
-      }}>
-      {p.label}
-    </button>
-  ))}
+#### C.2 — Bar chart rengini coder'a göre değiştir
+Şu an mavi gradyan. Seçili coder'a göre:
+- Default Huffman → klein
+- Custom Huffman → leaf
+- Arithmetic → plum
+
+```tsx
+const coderColor = {
+  'huffman-default': 'var(--klein)',
+  'huffman-custom':  'var(--leaf)',
+  'arithmetic':      'var(--plum)',
+}[settings.coder];
+
+// Bar style:
+background: `linear-gradient(180deg, ${coderColor} 0%, ${coderColor}66 100%)`,
+```
+
+#### C.3 — Estimated bitstream size kartı
+Sağ panele yeni bir alt-kart: **estimated payload in KB**.
+
+```tsx
+// Mock: 1024×1024 image
+const estimatedKB = Math.round((1024 * 1024 * bpp) / (8 * 1024));
+
+<div style={{ marginTop: 14, padding: '14px 16px', background: 'var(--paper-2)', border: '1px solid var(--rule)', borderRadius: 'var(--r-md)' }}>
+  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.18em', color: 'var(--ink-3)', textTransform: 'uppercase', marginBottom: 6 }}>
+    Estimated Bitstream
+  </div>
+  <div style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 28, color: 'var(--ink)' }}>
+    {estimatedKB}<span style={{ fontFamily: 'var(--font-mono)', fontStyle: 'normal', fontSize: 11, color: 'var(--klein)', marginLeft: 6 }}>KB</span>
+  </div>
+  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--ink-4)', marginTop: 4 }}>
+    1024 × 1024 · {bpp} bpp
+  </div>
 </div>
 ```
 
-`filtered` listesini de filter'a göre süz.
+#### C.4 — Coder formula card
+Sayfa altına küçük bir bilgi kartı: **"Why these matter"**.
 
-### Görev E — History CR sort
-
-Tablo başlığında "CR" sütunu tıklanınca azalan/artan sıraya alsın. State: `sortBy: 'cr-asc' | 'cr-desc' | null`.
-
-### Görev F — Dashboard type benchmark widget
-
-**Dosya:** `src/app/pages/DashboardPage.tsx`
-
-5 tip için mini kart sırası: her kartta `Run preset` butonu → process'i o preset ile çalıştır (mock data, gerçek pipeline'a gerek yok). Tablo dolar.
+```
+Default Huffman   ─ static tables, no per-image overhead, 5-10% over arithmetic
+Custom Huffman    ─ optimized for this specimen, 4-32 byte table overhead
+Arithmetic        ─ continuous fraction encoding, theoretical optimum
+```
 
 ---
 
@@ -206,12 +148,15 @@ npm run dev
 ```
 
 Test senaryosu:
-1. Upload → Preproc → Transform → Quantize'da **Δ=64** yap → Entropy → Process → Results
-   - Comparator: reconstructed taraf belirgin bloklu/bulanık görünmeli
-2. Δ=8 ile aynı yolu yap → minimal bozulma görünmeli
-3. Charts tab → 5-tip benchmark görüyor musun?
-4. History → tip filter chip'leri çalışıyor mu?
-5. History → CR sütununa tıkla → sıralanıyor mu?
+1. `/quantization` → Δ slider'ı 1'den 64'e oynat
+   - **CR önizlemesi her zaman ≥ 16:1** (kontrol et!)
+   - Δ=64'te PSNR < 18 dB
+   - Lossless aç → CR ≈ 2.4:1, PSNR = ∞
+2. `/entropy` → coder değiştir
+   - bar chart rengi değişiyor mu?
+   - Estimated KB güncelleniyor mu?
+3. Pipeline akışı: `/quantization` → "Next: Entropy" → `/entropy` → "Next: Process" → `/processing` (otomatik geçiş)
+4. TypePresetBanner: AI Generated tipinde "Apply preset" → coder = Custom Huffman olmalı
 
 Build:
 ```bash
@@ -224,31 +169,32 @@ npm run build
 ## 📤 4. Commit & push
 
 ```bash
-git add src/app/pages/ResultsPage.tsx src/app/pages/HistoryPage.tsx src/app/pages/DashboardPage.tsx src/app/components/BlockArtifactFilter.tsx src/app/components/ComparisonSlider.tsx
-git commit -m "feat(results+history): JPEG block artifact, type benchmark chart, type filter chips"
-git push origin feature/results-azra
+git add src/app/pages/QuantizationPage.tsx src/app/pages/EntropyPage.tsx
+git commit -m "feat(quantize+entropy): live matrix preview, color-coded bars, payload estimate"
+git push origin feature/quantization-berfin
 ```
 
-PR aç: `feature/results-azra` → `main`
+PR aç: `feature/quantization-berfin` → `main`
 
 ---
 
 ## 🆘 Takıldığında
 
-- **SVG filter çalışmıyor:** Filter mount edildiği yer DOM'da en üstte olsun, `<App>` içinde bir kez render et
-- **`stepSize` undefined diyor:** `currentResult.stepSize ?? 18` ile fallback ver
-- **Recharts `Cell` component import edilmiyor:** `import { Cell } from 'recharts';`
-- **History filter sayıları yanlış:** `filtered = LEDGER.filter(...)` mantığı doğru mu bak
+- **CR < 16 hesaplıyorsa formül senin değişmiş demektir** — `estimateMetrics` fonksiyonunu kontrol et:
+  ```ts
+  const baseCR = 16 + Math.pow(stepSize / 64, 0.85) * 64;
+  ```
+- **DCTBlockPanel `delta` prop'u yok diyor:** Fatmanur'un ekran ekran cevabını bekle veya sen bir kopyasını al
+- **TypePresetBanner sayfada görünmüyor:** localStorage'da `spectra_upload` boş → önce Upload'da görsel yükle
 
 ---
 
 ## 📚 Yararlı dosyalar
 
-- `src/app/pages/ResultsPage.tsx` — senin sayfan
-- `src/app/pages/HistoryPage.tsx` — senin sayfan
-- `src/app/pages/DashboardPage.tsx` — senin sayfan
-- `src/app/lib/imageTypeProfiles.ts` — okuma (5 profil)
-- `src/app/components/ComparisonSlider.tsx` — senin sayfanda kullanılıyor
+- `src/app/pages/QuantizationPage.tsx` — senin orijinal sayfan
+- `src/app/pages/EntropyPage.tsx` — yeni, senin sayfan
+- `src/app/lib/imageTypeProfiles.ts` — sadece okuma
+- `src/app/components/TypePresetBanner.tsx` — hazır
 - `TASKS_V2.md` — ekip roadmap'i
 
-İyi çalışmalar! 📈
+İyi çalışmalar! 📊
