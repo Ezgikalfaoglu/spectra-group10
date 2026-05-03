@@ -8,6 +8,7 @@
  * "Practical Fast 1-D DCT Algorithms" and most JPEG textbooks.
  */
 
+import { useState } from 'react';
 import { ArrowRight, Sigma } from 'lucide-react';
 
 /* ── Standard JPEG 8×8 luminance block ── */
@@ -36,9 +37,10 @@ const DCT: number[][] = [
 
 const MAX_DCT_ABS = 415;
 
+/* round(F / Δ) · Δ → dequantised matrix; HF cluster collapses to 0 */
 function quantizeDct(delta: number) {
   const safeDelta = Math.max(1, delta);
-  return DCT.map((row) => row.map((v) => Math.round(v / safeDelta)));
+  return DCT.map((row) => row.map((v) => Math.round(v / safeDelta) * safeDelta));
 }
 
 function pixelBg(v: number) {
@@ -48,7 +50,6 @@ function pixelBg(v: number) {
 
 function dctBg(v: number) {
   const intensity = Math.min(1, Math.abs(v) / MAX_DCT_ABS);
-  // negative coefficients tint plum, positive tint klein
   if (v < 0) return `rgba(75, 30, 122, ${0.06 + intensity * 0.55})`;
   if (v > 0) return `rgba(30, 42, 255, ${0.06 + intensity * 0.55})`;
   return 'var(--paper-2)';
@@ -61,14 +62,57 @@ function dctTextColor(v: number) {
   return 'var(--ink-1)';
 }
 
-export function DCTBlockPanel({ delta = 1 }: { delta?: number }) {
-  const quantized = quantizeDct(delta);
+type HoverCell = { ri: number; ci: number; v: number; x: number; y: number };
+
+export function DCTBlockPanel({ delta: externalDelta }: { delta?: number } = {}) {
+  const isControlled = typeof externalDelta === 'number';
+  const [previewQ, setPreviewQ] = useState(false);
+  const [internalDelta, setInternalDelta] = useState(8);
+  const [hovered, setHovered] = useState<HoverCell | null>(null);
+
+  const showQuantized = isControlled ? externalDelta! > 1 : previewQ;
+  const delta = isControlled ? externalDelta! : internalDelta;
+  const effectiveDelta = showQuantized ? delta : 1;
+  const quantized = quantizeDct(effectiveDelta);
   const zeroCount = quantized.flat().filter((v) => v === 0).length;
   const zeroPct = Math.round((zeroCount / 64) * 100);
-  const isQuantizedView = delta > 1;
 
   return (
-    <div style={{ padding: 22 }}>
+    <div data-dct-panel style={{ padding: 22, position: 'relative' }}>
+
+      {/* Quantization toolbar — only when uncontrolled */}
+      {!isControlled && (
+        <div
+          style={{
+            display: 'flex', alignItems: 'center', gap: 12,
+            marginBottom: 14, flexWrap: 'wrap',
+          }}
+        >
+          <button
+            onClick={() => setPreviewQ((q) => !q)}
+            className={previewQ ? 'sp-btn sp-btn-klein sp-btn-sm' : 'sp-btn sp-btn-ghost sp-btn-sm'}
+          >
+            {previewQ ? `Preview Δ = ${internalDelta}` : 'Show after quantization'}
+          </button>
+          {previewQ && (
+            <>
+              <input
+                type="range" min={1} max={32} value={internalDelta}
+                onChange={(e) => setInternalDelta(Number(e.target.value))}
+                style={{ flex: 1, minWidth: 120, accentColor: 'var(--klein)' }}
+              />
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)', fontSize: 10,
+                  letterSpacing: '0.1em', color: 'var(--klein)',
+                }}
+              >
+                {zeroPct}% zeros
+              </span>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Formula */}
       <div
@@ -133,15 +177,26 @@ export function DCTBlockPanel({ delta = 1 }: { delta?: number }) {
           </div>
         </div>
 
-        {/* DCT block */}
+        {/* DCT block — hoverable */}
         <BlockGrid
-          title={isQuantizedView ? 'Quantized coeffs · q(u,v)' : 'DCT coeffs · F(u,v)'}
-          subtitle={isQuantizedView ? `Δ = ${delta} · ${zeroPct}% zeros` : 'Frequency · −415..+77'}
-          values={isQuantizedView ? quantized : DCT}
+          title={showQuantized ? 'Quantized coeffs · q(u,v)·Δ' : 'DCT coeffs · F(u,v)'}
+          subtitle={showQuantized ? `Δ = ${delta} · ${zeroPct}% zeros` : 'Frequency · −415..+77'}
+          values={showQuantized ? quantized : DCT}
           bgFn={dctBg}
           textFn={dctTextColor}
           accent="var(--klein)"
           highlightDC
+          onCellEnter={(ri, ci, v, e) => {
+            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+            const panel = (e.currentTarget as HTMLElement).closest('[data-dct-panel]') as HTMLElement | null;
+            const panelRect = panel?.getBoundingClientRect();
+            setHovered({
+              ri, ci, v,
+              x: rect.left - (panelRect?.left ?? 0) + rect.width / 2,
+              y: rect.top - (panelRect?.top ?? 0),
+            });
+          }}
+          onCellLeave={() => setHovered(null)}
         />
       </div>
 
@@ -195,13 +250,90 @@ export function DCTBlockPanel({ delta = 1 }: { delta?: number }) {
           </div>
         ))}
       </div>
+
+      {/* Hover tooltip overlay */}
+      {hovered && <DctTooltip cell={hovered} />}
     </div>
+  );
+}
+
+/* ── Hover tooltip card ── */
+function DctTooltip({ cell }: { cell: HoverCell }) {
+  const { ri: u, ci: v, v: F, x, y } = cell;
+  const isDC = u === 0 && v === 0;
+  const label = isDC ? 'DC' : (u + v <= 3 ? 'Low-frequency' : u + v >= 10 ? 'High-frequency' : 'Mid-frequency');
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        left: x, top: y,
+        transform: 'translate(-50%, calc(-100% - 10px))',
+        background: 'var(--paper)',
+        border: '1px solid var(--klein)',
+        borderRadius: 'var(--r-md)',
+        boxShadow: '0 10px 28px rgba(0,0,0,0.18)',
+        padding: '10px 12px',
+        pointerEvents: 'none',
+        zIndex: 20,
+        minWidth: 140,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: 'var(--font-mono)', fontSize: 11,
+          color: 'var(--klein)', fontWeight: 600,
+          letterSpacing: '0.04em', marginBottom: 6,
+        }}
+      >
+        F(u={u}, v={v}) = {F}
+      </div>
+      <CosineBasis u={u} v={v} />
+      <div
+        style={{
+          fontFamily: 'var(--font-mono)', fontSize: 9,
+          color: 'var(--ink-3)', letterSpacing: '0.1em',
+          textTransform: 'uppercase', marginTop: 6,
+        }}
+      >
+        Cosine basis · {label}
+      </div>
+    </div>
+  );
+}
+
+/* ── 32×32 SVG cosine basis preview for (u, v) ── */
+function CosineBasis({ u, v }: { u: number; v: number }) {
+  const N = 16;
+  const cells: { x: number; y: number; c: string }[] = [];
+  for (let y = 0; y < N; y++) {
+    for (let x = 0; x < N; x++) {
+      const fx = x / 2;
+      const fy = y / 2;
+      const val =
+        Math.cos(((2 * fx + 1) * u * Math.PI) / 16) *
+        Math.cos(((2 * fy + 1) * v * Math.PI) / 16);
+      const g = Math.round(((val + 1) / 2) * 255);
+      cells.push({ x, y, c: `rgb(${g},${g},${g})` });
+    }
+  }
+  const cell = 6;
+  return (
+    <svg
+      width={N * cell} height={N * cell}
+      style={{ display: 'block', borderRadius: 4, border: '1px solid var(--rule)' }}
+      shapeRendering="crispEdges"
+    >
+      {cells.map((c, i) => (
+        <rect key={i} x={c.x * cell} y={c.y * cell} width={cell} height={cell} fill={c.c} />
+      ))}
+    </svg>
   );
 }
 
 /* ── 8×8 grid renderer ── */
 function BlockGrid({
   title, subtitle, values, bgFn, textFn, accent, highlightDC,
+  onCellEnter, onCellLeave,
 }: {
   title: string;
   subtitle: string;
@@ -210,6 +342,8 @@ function BlockGrid({
   textFn: (v: number) => string;
   accent: string;
   highlightDC?: boolean;
+  onCellEnter?: (ri: number, ci: number, v: number, e: React.MouseEvent) => void;
+  onCellLeave?: () => void;
 }) {
   return (
     <div>
@@ -242,6 +376,8 @@ function BlockGrid({
           return (
             <div
               key={`${ri}-${ci}`}
+              onMouseEnter={onCellEnter ? (e) => onCellEnter(ri, ci, v, e) : undefined}
+              onMouseLeave={onCellLeave}
               style={{
                 aspectRatio: '1',
                 background: bgFn(v),
@@ -254,8 +390,8 @@ function BlockGrid({
                 outlineOffset: -1.5,
                 borderRadius: 1,
                 position: 'relative',
+                cursor: onCellEnter ? 'crosshair' : 'default',
               }}
-              title={`(${ri}, ${ci}) = ${v}`}
             >
               {v}
             </div>

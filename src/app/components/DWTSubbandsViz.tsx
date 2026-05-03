@@ -4,12 +4,27 @@ import { motion } from 'motion/react';
 export function DWTSubbandsViz({ level = 3, active = true }: { level?: number; active?: boolean }) {
   const levels = Math.max(1, Math.min(5, level));
 
+  // Mock subband coefficient samples — energy is concentrated in LL, HF cells ≈ 0
+  const COEFF = { LL: 234.5, LH: 12.3, HL: -8.7, HH: -1.2 } as const;
+
+  const ValueLabel = ({ v, dark }: { v: number; dark?: boolean }) => (
+    <span
+      className={`absolute inset-0 flex items-center justify-center font-mono font-semibold text-[11px] tracking-tight ${
+        dark ? 'text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)]' : 'text-slate-900'
+      }`}
+      style={{ pointerEvents: 'none' }}
+    >
+      {v.toFixed(1)}
+    </span>
+  );
+
   const Subband = ({
     depth,
     maxDepth,
   }: { depth: number; maxDepth: number }) => {
     const isLast = depth === maxDepth;
     const delay = depth * 0.2;
+    const showValues = depth === 1;
 
     const cellClasses = 'relative overflow-hidden rounded-md border border-cyan-300/70';
 
@@ -24,6 +39,7 @@ export function DWTSubbandsViz({ level = 3, active = true }: { level?: number; a
             className={`${cellClasses} bg-gradient-to-br from-cyan-200 to-cyan-400`}
           >
             <span className="absolute top-0.5 left-1 text-[8px] font-mono font-bold text-white/90">LL{depth}</span>
+            <ValueLabel v={COEFF.LL} dark />
           </motion.div>
         ) : (
           <div className={`${cellClasses} bg-white`}>
@@ -39,6 +55,7 @@ export function DWTSubbandsViz({ level = 3, active = true }: { level?: number; a
           className={`${cellClasses} bg-[repeating-linear-gradient(0deg,#0891b2_0_2px,#cffafe_2px_4px)]`}
         >
           <span className="absolute top-0.5 left-1 text-[8px] font-mono font-bold text-slate-800/80">HL{depth}</span>
+          {showValues && <ValueLabel v={COEFF.HL} />}
         </motion.div>
 
         {/* LH (bottom-left) vertical edges */}
@@ -49,6 +66,7 @@ export function DWTSubbandsViz({ level = 3, active = true }: { level?: number; a
           className={`${cellClasses} bg-[repeating-linear-gradient(90deg,#0891b2_0_2px,#cffafe_2px_4px)]`}
         >
           <span className="absolute top-0.5 left-1 text-[8px] font-mono font-bold text-slate-800/80">LH{depth}</span>
+          {showValues && <ValueLabel v={COEFF.LH} />}
         </motion.div>
 
         {/* HH (bottom-right) diagonal */}
@@ -59,6 +77,7 @@ export function DWTSubbandsViz({ level = 3, active = true }: { level?: number; a
           className={`${cellClasses} bg-[repeating-linear-gradient(45deg,#6366f1_0_2px,#e0e7ff_2px_4px)]`}
         >
           <span className="absolute top-0.5 left-1 text-[8px] font-mono font-bold text-slate-800/80">HH{depth}</span>
+          {showValues && <ValueLabel v={COEFF.HH} />}
         </motion.div>
       </div>
     );
