@@ -8,11 +8,12 @@ import {
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer, RadarChart, Radar,
-  PolarGrid, PolarAngleAxis, PolarRadiusAxis
+  PolarGrid, PolarAngleAxis, PolarRadiusAxis, Cell
 } from 'recharts';
 import { ComparisonSlider, type ComparisonMode } from '../components/ComparisonSlider';
 import { InsightCard } from '../components/InsightCard';
-
+import { BlockArtifactFilter } from "../components/BlockArtifactFilter";
+import { listProfiles } from '../lib/imageTypeProfiles';
 const DEMO_IMAGE = 'https://images.unsplash.com/photo-1581447547509-711eb65cd5f2?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxsYW5kc2NhcGUlMjBtb3VudGFpbiUyMGdyYXlzY2FsZSUyMG5hdHVyZXxlbnwxfHx8fDE3NzY3NjEzOTJ8MA&ixlib=rb-4.1.0&q=80&w=1080';
 
 const DEMO_RESULT = {
@@ -51,6 +52,12 @@ const RADAR_DATA = [
   { subject: 'Speed', JPEG: 90, JPEG2000: 72 },
   { subject: 'Quality', JPEG: 65, JPEG2000: 80 },
 ];
+const TYPE_BENCHMARK = listProfiles().map(p => ({
+  type: p.label,
+  cr: 16 * p.crBonus + (p.stepSize / 64) * 64,
+  psnr: p.forceLossless ? 45 : 38 - (p.stepSize / 32) * 16,
+  fill: p.accent,
+}));
 
 type TabType = 'jpeg2000' | 'jpeg' | 'comparison';
 
@@ -90,6 +97,7 @@ export function ResultsPage() {
   const currentResult = activeTab === 'jpeg' ? JPEG_DEMO : result;
   const baselineResult = activeTab === 'jpeg2000' ? JPEG_DEMO : result;
   const imgSrc = currentResult.imageDataUrl || DEMO_IMAGE;
+  const stepSize = currentResult.stepSize ?? 18;
 
   const renderDelta = (label: string, current: number, baseline: number) => {
     const betterIsLower = label === 'MSE';
@@ -119,7 +127,9 @@ export function ResultsPage() {
   };
 
   return (
-    <motion.div
+    <>
+      <BlockArtifactFilter />
+      <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6 }}
@@ -233,7 +243,7 @@ export function ResultsPage() {
 
           <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 24 }}>
             {/* Comparison slider */}
-            <div>
+            <div style={{ position: "relative" }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.2em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>COMPARATOR · DRAG THE HANDLE</span>
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--ink-4)' }}>{result.imageName}</span>
@@ -272,29 +282,91 @@ export function ResultsPage() {
                 originalSrc={imgSrc}
                 reconstructedSrc={imgSrc}
                 originalFilter="none"
-                reconstructedFilter={`blur(${currentResult.stepSize > 22 ? 2.4 : currentResult.stepSize > 16 ? 1.4 : 0.8}px) contrast(${currentResult.stepSize > 22 ? 0.82 : currentResult.stepSize > 16 ? 0.9 : 0.96}) saturate(${currentResult.stepSize > 20 ? 0.88 : 0.98}) brightness(${currentResult.stepSize > 20 ? 1.04 : 1.01})`}
+                reconstructedFilter={`
+  blur(${stepSize > 22 ? 2.4 : stepSize > 16 ? 1.4 : 0.8}px)
+  contrast(${stepSize > 22 ? 0.82 : stepSize > 16 ? 0.9 : 0.96})
+  saturate(${stepSize > 20 ? 0.88 : 0.98})
+  brightness(${stepSize > 20 ? 1.04 : 1.01})
+  ${stepSize > 40 ? "url(#blockify)" : ""}
+`}
               />
+              {stepSize > 40 && (
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    pointerEvents: "none",
+                    backgroundImage:
+                      "linear-gradient(rgba(0,0,0,0.18) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.18) 1px, transparent 1px)",
+                    backgroundSize: "32px 32px",
+                    mixBlendMode: "overlay",
+                    clipPath: "inset(0 0 0 var(--split, 50%))",
+                  }}
+                />
+              )}
             </div>
 
             {/* Metrics table */}
-            <div style={{ border: '1px solid var(--rule)', borderRadius: 'var(--r-md)', overflow: 'hidden' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', padding: '10px 20px', background: 'var(--paper-3)', borderBottom: '1px solid var(--rule)' }}>
-                {['METRIC', 'VALUE', 'INTERPRETATION'].map(h => (
-                  <span key={h} style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.2em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>{h}</span>
+            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+              <div style={{ flex: 1, border: '1px solid var(--rule)', borderRadius: 'var(--r-md)', overflow: 'hidden' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', padding: '10px 20px', background: 'var(--paper-3)', borderBottom: '1px solid var(--rule)' }}>
+                  {['METRIC', 'VALUE', 'INTERPRETATION'].map(h => (
+                    <span key={h} style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.2em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>{h}</span>
+                  ))}
+                </div>
+                {[
+                  { metric: 'MSE', value: `${currentResult.mse?.toFixed?.(2) ?? currentResult.mse}`, interp: currentResult.mse < 50 ? 'Good — low pixel distortion' : 'Moderate distortion detected' },
+                  { metric: 'PSNR', value: `${currentResult.psnr?.toFixed?.(2) ?? currentResult.psnr} dB`, interp: currentResult.psnr >= 30 ? 'Acceptable quality (≥ 30 dB threshold)' : 'Below recommended threshold' },
+                  { metric: 'Compression Ratio', value: currentResult.cr, interp: 'File size reduced significantly' },
+                  { metric: 'Sparsity Ratio', value: currentResult.sparsity, interp: 'High proportion of zero coefficients' },
+                ].map((row, i) => (
+                  <div key={row.metric} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', padding: '14px 20px', borderBottom: i < 3 ? '1px solid var(--rule-soft)' : 'none', background: i % 2 === 0 ? 'white' : 'var(--paper-2)' }}>
+                    <span style={{ fontSize: 13.5, color: 'var(--ink-2)' }}>{row.metric}</span>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--klein)' }}>{row.value}</span>
+                    <span style={{ fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.5 }}>{row.interp}</span>
+                  </div>
                 ))}
               </div>
-              {[
-                { metric: 'MSE', value: `${currentResult.mse?.toFixed?.(2) ?? currentResult.mse}`, interp: currentResult.mse < 50 ? 'Good — low pixel distortion' : 'Moderate distortion detected' },
-                { metric: 'PSNR', value: `${currentResult.psnr?.toFixed?.(2) ?? currentResult.psnr} dB`, interp: currentResult.psnr >= 30 ? 'Acceptable quality (≥ 30 dB threshold)' : 'Below recommended threshold' },
-                { metric: 'Compression Ratio', value: currentResult.cr, interp: 'File size reduced significantly' },
-                { metric: 'Sparsity Ratio', value: currentResult.sparsity, interp: 'High proportion of zero coefficients' },
-              ].map((row, i) => (
-                <div key={row.metric} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', padding: '14px 20px', borderBottom: i < 3 ? '1px solid var(--rule-soft)' : 'none', background: i % 2 === 0 ? 'white' : 'var(--paper-2)' }}>
-                  <span style={{ fontSize: 13.5, color: 'var(--ink-2)' }}>{row.metric}</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--klein)' }}>{row.value}</span>
-                  <span style={{ fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.5 }}>{row.interp}</span>
+
+              <div
+                className="sp-card"
+                style={{
+                  padding: 20,
+                  minWidth: 260,
+                  maxWidth: 300,
+                  background: 'var(--ink)',
+                  color: 'var(--paper)',
+                  borderRadius: 'var(--r-md)',
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 10,
+                    letterSpacing: '0.2em',
+                    textTransform: 'uppercase',
+                    marginBottom: 14,
+                    color: 'var(--cyan)',
+                  }}
+                >
+                  HOW IS CR COMPUTED?
                 </div>
-              ))}
+
+                <div
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 12,
+                    lineHeight: 1.7,
+                    whiteSpace: 'pre-line',
+                  }}
+                >
+                  CR = uncompressed_size / encoded_size
+
+                  = (W × H × 8) / encoded_bits
+
+                  PSNR = 10 · log₁₀(255² / MSE)
+                </div>
+              </div>
             </div>
           </div>
         </motion.div>
@@ -388,8 +460,39 @@ export function ResultsPage() {
               </div>
             </div>
           </div>
+
+          <div className="sp-card" style={{ padding: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+              <Layers style={{ width: 14, height: 14, color: 'var(--klein)' }}/>
+              <span style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                letterSpacing: '0.2em',
+                color: 'var(--ink-2)',
+                textTransform: 'uppercase'
+              }}>
+                Image-type Benchmark · trained presets
+              </span>
+            </div>
+
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={TYPE_BENCHMARK} margin={{ top: 5, right: 10, left: -15, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--rule)" vertical={false}/>
+                <XAxis dataKey="type" tick={{ fontSize: 11, fill: 'var(--ink-3)', fontFamily: 'var(--font-mono)' }} stroke="var(--rule)"/>
+                <YAxis tick={{ fontSize: 11, fill: 'var(--ink-3)', fontFamily: 'var(--font-mono)' }} stroke="var(--rule)"/>
+                <Tooltip contentStyle={ttStyle}/>
+
+                <Bar dataKey="cr" name="CR" radius={[3,3,0,0]}>
+                  {TYPE_BENCHMARK.map((d, i) => (
+                    <Cell key={i} fill={d.fill} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </motion.div>
       )}
-    </motion.div>
+      </motion.div>
+    </>
   );
 }

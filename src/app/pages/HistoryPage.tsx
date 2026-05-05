@@ -10,25 +10,27 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid,
   ResponsiveContainer
 } from 'recharts';
+import { listProfiles } from '../lib/imageTypeProfiles';
 
 interface RunRecord {
   id: string; date: string; imageName: string;
   method: string; wavelet: string; decompLevel: number | string;
   quantType: string; stepSize: number;
   mse: number; psnr: number; cr: string; sparsity: string;
+  type?: string;
 }
 
 const MOCK_HISTORY: RunRecord[] = [
-  { id: 'RUN-001', date: '2026-04-21T10:32:00Z', imageName: 'landscape_sample.tiff',  method: 'JPEG2000', wavelet: 'db4',  decompLevel: 3, quantType: 'scalar',  stepSize: 18, mse: 42.73,  psnr: 31.82, cr: '10.4:1', sparsity: '78%' },
-  { id: 'RUN-002', date: '2026-04-21T10:28:00Z', imageName: 'landscape_sample.tiff',  method: 'JPEG',    wavelet: '—',   decompLevel: '—', quantType: 'uniform', stepSize: 16, mse: 78.40,  psnr: 29.20, cr: '8.9:1',  sparsity: '62%' },
-  { id: 'RUN-003', date: '2026-04-21T10:15:00Z', imageName: 'fingerprint_01.bmp',     method: 'JPEG2000', wavelet: 'haar', decompLevel: 2, quantType: 'scalar',  stepSize: 8,  mse: 12.10,  psnr: 37.30, cr: '6.8:1',  sparsity: '55%' },
-  { id: 'RUN-004', date: '2026-04-20T16:44:00Z', imageName: 'biomedical_scan.png',    method: 'JPEG2000', wavelet: 'db2',  decompLevel: 4, quantType: 'scalar',  stepSize: 4,  mse: 5.20,   psnr: 40.97, cr: '4.1:1',  sparsity: '44%' },
-  { id: 'RUN-005', date: '2026-04-20T15:20:00Z', imageName: 'synthetic_graphic.png',  method: 'JPEG',    wavelet: '—',   decompLevel: '—', quantType: 'uniform', stepSize: 24, mse: 143.80, psnr: 26.55, cr: '14.3:1', sparsity: '81%' },
-  { id: 'RUN-006', date: '2026-04-20T14:55:00Z', imageName: 'portrait_natural.tiff',  method: 'JPEG2000', wavelet: 'db4',  decompLevel: 5, quantType: 'scalar',  stepSize: 12, mse: 22.90,  psnr: 34.53, cr: '9.2:1',  sparsity: '69%' },
-  { id: 'RUN-007', date: '2026-04-20T11:08:00Z', imageName: 'landscape_sample.tiff',  method: 'JPEG2000', wavelet: 'db2',  decompLevel: 3, quantType: 'uniform', stepSize: 20, mse: 58.40,  psnr: 30.47, cr: '12.1:1', sparsity: '74%' },
-  { id: 'RUN-008', date: '2026-04-19T17:30:00Z', imageName: 'hybrid_chart.bmp',       method: 'JPEG',    wavelet: '—',   decompLevel: '—', quantType: 'scalar',  stepSize: 32, mse: 220.60, psnr: 24.70, cr: '19.8:1', sparsity: '87%' },
-  { id: 'RUN-009', date: '2026-04-19T14:12:00Z', imageName: 'fingerprint_02.png',     method: 'JPEG2000', wavelet: 'haar', decompLevel: 1, quantType: 'scalar',  stepSize: 6,  mse: 8.40,   psnr: 38.88, cr: '5.4:1',  sparsity: '48%' },
-  { id: 'RUN-010', date: '2026-04-19T09:45:00Z', imageName: 'mri_slice.tiff',         method: 'JPEG2000', wavelet: 'db4',  decompLevel: 4, quantType: 'scalar',  stepSize: 4,  mse: 4.10,   psnr: 42.00, cr: '3.8:1',  sparsity: '41%' },
+  { id: 'RUN-001', date: '2026-04-21T10:32:00Z', imageName: 'landscape_sample.tiff',  method: 'JPEG2000', wavelet: 'db4',  decompLevel: 3, quantType: 'scalar',  stepSize: 18, mse: 42.73,  psnr: 31.82, cr: '10.4:1', sparsity: '78%', type: 'Natural' },
+  { id: 'RUN-002', date: '2026-04-21T10:28:00Z', imageName: 'landscape_sample.tiff',  method: 'JPEG',    wavelet: '—',   decompLevel: '—', quantType: 'uniform', stepSize: 16, mse: 78.40,  psnr: 29.20, cr: '8.9:1',  sparsity: '62%', type: 'Natural' },
+  { id: 'RUN-003', date: '2026-04-21T10:15:00Z', imageName: 'fingerprint_01.bmp',     method: 'JPEG2000', wavelet: 'haar', decompLevel: 2, quantType: 'scalar',  stepSize: 8,  mse: 12.10,  psnr: 37.30, cr: '6.8:1',  sparsity: '55%', type: 'Fingerprint' },
+  { id: 'RUN-004', date: '2026-04-20T16:44:00Z', imageName: 'biomedical_scan.png',    method: 'JPEG2000', wavelet: 'db2',  decompLevel: 4, quantType: 'scalar',  stepSize: 4,  mse: 5.20,   psnr: 40.97, cr: '4.1:1',  sparsity: '44%', type: 'Biomedical' },
+  { id: 'RUN-005', date: '2026-04-20T15:20:00Z', imageName: 'synthetic_graphic.png',  method: 'JPEG',    wavelet: '—',   decompLevel: '—', quantType: 'uniform', stepSize: 24, mse: 143.80, psnr: 26.55, cr: '14.3:1', sparsity: '81%', type: 'Synthetic' },
+  { id: 'RUN-006', date: '2026-04-20T14:55:00Z', imageName: 'portrait_natural.tiff',  method: 'JPEG2000', wavelet: 'db4',  decompLevel: 5, quantType: 'scalar',  stepSize: 12, mse: 22.90,  psnr: 34.53, cr: '9.2:1',  sparsity: '69%', type: 'Natural' },
+  { id: 'RUN-007', date: '2026-04-20T11:08:00Z', imageName: 'ai_render_scene.png',    method: 'JPEG2000', wavelet: 'db2',  decompLevel: 3, quantType: 'uniform', stepSize: 20, mse: 58.40,  psnr: 30.47, cr: '12.1:1', sparsity: '74%', type: 'AI Generated' },
+  { id: 'RUN-008', date: '2026-04-19T17:30:00Z', imageName: 'hybrid_chart.bmp',       method: 'JPEG',    wavelet: '—',   decompLevel: '—', quantType: 'scalar',  stepSize: 32, mse: 220.60, psnr: 24.70, cr: '19.8:1', sparsity: '87%', type: 'Synthetic' },
+  { id: 'RUN-009', date: '2026-04-19T14:12:00Z', imageName: 'fingerprint_02.png',     method: 'JPEG2000', wavelet: 'haar', decompLevel: 1, quantType: 'scalar',  stepSize: 6,  mse: 8.40,   psnr: 38.88, cr: '5.4:1',  sparsity: '48%', type: 'Fingerprint' },
+  { id: 'RUN-010', date: '2026-04-19T09:45:00Z', imageName: 'mri_slice.tiff',         method: 'JPEG2000', wavelet: 'db4',  decompLevel: 4, quantType: 'scalar',  stepSize: 4,  mse: 4.10,   psnr: 42.00, cr: '3.8:1',  sparsity: '41%', type: 'Biomedical' },
 ];
 
 type SortKey = keyof RunRecord;
@@ -42,9 +44,12 @@ export function HistoryPage() {
   const [rows, setRows] = useState<RunRecord[]>([]);
   const [search, setSearch] = useState('');
   const [methodFilter, setMethodFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('psnr');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [sortBy, setSortBy] = useState<'cr-asc' | 'cr-desc' | null>(null);
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  const profiles = listProfiles();
   
   useEffect(() => {
     const stored = localStorage.getItem('compressionHistory');
@@ -54,15 +59,19 @@ export function HistoryPage() {
   }, []);
 
   const handleSort = (key: SortKey) => {
+    setSortBy(null);
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortKey(key); setSortDir('asc'); }
   };
+
+  const parseCR = (cr: string) => parseFloat(cr.split(':')[0]);
 
   const filtered = rows
     .filter(r => {
       const q = search.toLowerCase();
       if (q && !r.imageName.toLowerCase().includes(q) && !r.id.toLowerCase().includes(q) && !r.method.toLowerCase().includes(q)) return false;
       if (methodFilter !== 'all' && r.method !== methodFilter) return false;
+      if (typeFilter && r.type !== typeFilter) return false;
       return true;
     })
     .sort((a, b) => {
@@ -75,6 +84,16 @@ export function HistoryPage() {
       const cmp = String(va).localeCompare(String(vb), undefined, { numeric: true });
       return sortDir === 'asc' ? cmp : -cmp;
     });
+
+  const finalHistory = [...filtered];
+
+  if (sortBy === 'cr-desc') {
+    finalHistory.sort((a, b) => parseCR(b.cr) - parseCR(a.cr));
+  }
+
+  if (sortBy === 'cr-asc') {
+    finalHistory.sort((a, b) => parseCR(a.cr) - parseCR(b.cr));
+  }
 
   const SortBtn = ({ col }: { col: SortKey }) => (
     <button onClick={() => handleSort(col)} style={{ marginLeft: 4, opacity: 0.5, cursor: 'pointer', background: 'none', border: 'none', color: 'var(--ink-3)', display: 'inline-flex', alignItems: 'center' }}>
@@ -117,7 +136,7 @@ export function HistoryPage() {
           <button className="sp-btn sp-btn-ghost sp-btn-sm" onClick={() => {
             const csv = [
               ['Run ID', 'Date', 'Specimen', 'Method', 'Wavelet', 'Level', 'Quant', 'Step', 'MSE', 'PSNR', 'CR', 'Sparsity'].join(','),
-              ...filtered.map(r => [
+              ...finalHistory.map(r => [
                 r.id,
                 formatDate(r.date),
                 r.imageName,
@@ -194,6 +213,35 @@ export function HistoryPage() {
         </div>
       </motion.div>
 
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+        <button
+          onClick={() => setTypeFilter(null)}
+          className={!typeFilter ? 'sp-pill sp-pill-active' : 'sp-pill'}
+        >
+          All
+        </button>
+
+        {profiles.map(p => (
+          <button
+            key={p.type}
+            onClick={() => setTypeFilter(p.type)}
+            style={{
+              padding: '5px 11px',
+              borderRadius: 100,
+              cursor: 'pointer',
+              border: `1px solid ${typeFilter === p.type ? p.accent : 'var(--rule)'}`,
+              background: typeFilter === p.type ? `${p.accent}11` : 'white',
+              color: typeFilter === p.type ? p.accent : 'var(--ink-3)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              letterSpacing: '0.08em',
+            }}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
       {/* Table */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="sp-card" style={{ overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto' }}>
@@ -214,15 +262,24 @@ export function HistoryPage() {
                   { key: 'cr', label: 'CR' },
                   { key: 'sparsity', label: 'Sparsity' },
                 ].map(({ key, label }) => (
-                  <th key={key} style={{ padding: '11px 16px', textAlign: 'left', fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.2em', color: 'var(--ink-3)', textTransform: 'uppercase', whiteSpace: 'nowrap', fontWeight: 400 }}>
-                    {label}<SortBtn col={key as SortKey} />
+                  <th
+                    key={key}
+                    onClick={key === 'cr' ? () => {
+                      if (sortBy === 'cr-desc') setSortBy('cr-asc');
+                      else setSortBy('cr-desc');
+                    } : undefined}
+                    style={{ padding: '11px 16px', textAlign: 'left', fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.2em', color: 'var(--ink-3)', textTransform: 'uppercase', whiteSpace: 'nowrap', fontWeight: 400, cursor: key === 'cr' ? 'pointer' : 'default' }}
+                  >
+                    {key === 'cr'
+                      ? <>CR {sortBy === 'cr-desc' ? '↓' : sortBy === 'cr-asc' ? '↑' : ''}</>
+                      : <>{label}<SortBtn col={key as SortKey} /></>}
                   </th>
                 ))}
                 <th style={{ padding: '11px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.2em', color: 'var(--ink-3)', textTransform: 'uppercase', fontWeight: 400 }}>Actions</th>
               </tr>
             </thead>
 <tbody>
-  {filtered.length === 0 && (
+  {finalHistory.length === 0 && (
     <tr>
       <td colSpan={13} style={{ textAlign: 'center', padding: '64px 20px' }}>
         
@@ -249,7 +306,7 @@ export function HistoryPage() {
       </td>
     </tr>
   )}
-  {filtered.map((row, idx) => (
+  {finalHistory.map((row, idx) => (
     <Fragment key={row.id}>
       <tr
         onClick={() => setExpandedRow(expandedRow === row.id ? null : row.id)}
