@@ -1,143 +1,125 @@
-# 👋 Ayşe Berfin — `feature/quantization-berfin`
+# 👋 Gül Deniz — `feature/upload-guldeniz`
 
 > **İterasyon 2** — Hoca geri bildirimleri sonrası
-> Genel proje haritası: `TASKS_V2.md` (main'de)
+> Güncel görev listesi: bu dosya. Genel proje haritası: `TASKS_V2.md` (main'de)
 
 ## 📋 Senin sorumluluğun
 
 Bu iterasyonda **2 sayfa** sende:
-- ✅ `/quantization` — Senin orijinal sayfan
-- 🆕 `/entropy` — **YENİ sayfa**, sahibi sensin (quantization'dan hemen sonra geliyor)
-
-> ⚠️ **Hoca'nın özel ricası:** "CR (compression ratio) çok küçük, **minimum 16 olsun**, yükseldikçe görsel bozulma da artsın." → Formül zaten güncellendi (`baseCR = 16 + (s/64)^0.85 × 64`). Sen UI tarafını cilala.
+- ✅ `/upload` — Senin orijinal sayfan
+- 🆕 `/preprocessing` — **YENİ sayfa**, sahibi sensin
 
 ---
 
 ## 🚀 1. Ortamı kur
 
-### GitHub Codespaces (tavsiye)
-1. https://github.com/Ezgikalfaoglu/spectra-group10 → **`<> Code`** → **Codespaces** → **Create codespace on `feature/quantization-berfin`**
-2. Terminal:
+### GitHub Codespaces (tavsiye edilen — kurulum yok)
+1. https://github.com/Ezgikalfaoglu/spectra-group10 → **`<> Code`** → **Codespaces** → **Create codespace on `feature/upload-guldeniz`**
+2. Tarayıcıda VS Code açılır
+3. Terminal açılınca:
 ```bash
-nvm use 20
-git pull
-npm install
-npm run dev
+nvm use 20         # Node 20'yi aktif et (Vite 6 buna ihtiyaç duyuyor)
+git pull           # son değişiklikleri çek
+npm install        # bağımlılıklar
+npm run dev        # geliştirme sunucusu (port 3000 veya 5173)
 ```
+4. Açılan port linkine tıkla → tarayıcıda Spectra arayüzü açılır
 
-### Yerel
+### Yerel makine (alternatif)
 ```bash
 git clone https://github.com/Ezgikalfaoglu/spectra-group10.git
 cd spectra-group10
-git checkout feature/quantization-berfin
+git checkout feature/upload-guldeniz
 git pull
-nvm use 20
+nvm use 20         # yoksa: nvm install 20
 npm install
 npm run dev
 ```
 
-> ❗ `crypto$2.getRandomValues` hatası → `nvm use 20`
+> ❗ **Önemli:** Eğer `crypto$2.getRandomValues is not a function` hatası alırsan **Node sürümün 18 veya altı**. `nvm use 20` (yoksa `nvm install 20`) çalıştır.
 
 ---
 
-## 🎯 2. Yapacakların
+## 🎯 2. Yapacakların — sırayla
 
-### Görev A — Quantization sayfasında live matrix preview ekle
+### Görev A — Upload sayfasında "AI Generated" tipi için preset preview ekle
 
-**Dosya:** `src/app/pages/QuantizationPage.tsx`
+**Dosya:** `src/app/pages/UploadPage.tsx`
+**Şu an:** `IMAGE_TYPES` listesine "AI Generated" zaten eklendi. Sadece tıklanınca seçim göründüğünü doğrula.
 
-Sağdaki "Estimated Output" kartının altına yeni bir kart ekle: **Quantization Effect Preview**.
+**Eklenecek:** Tip seçilince altında küçük bir **"Bu tip için trained preset"** kartı çıksın. Örnek:
 
-Fatmanur'un `DCTBlockPanel` bileşenini kullan ama prop ile `delta = settings.stepSize` gönder. Böylece slider'ı oynatınca matriste **HF hücrelerin sıfıra düştüğü** canlı görünür. Hoca'ya quantization'ın matematiksel etkisini göster.
-
-```tsx
-import { DCTBlockPanel } from '../components/DCTBlockPanel';
-
-// JSX'te:
-<div className="sp-card" style={{ overflow: 'hidden' }}>
-  <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--rule)' }}>
-    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.22em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>
-      QUANTIZATION EFFECT · LIVE
-    </span>
-  </div>
-  <DCTBlockPanel delta={settings.stepSize} />
-</div>
+```
+┌──────────────────────────────────────────────────┐
+│ ✨ TRAINED PRESET · AI GENERATED                 │
+│ J2K · DWT · db4 · L4 · Δ14 · Custom Huffman    │
+│ "Diffusion / GAN output — softer high-freq..."  │
+└──────────────────────────────────────────────────┘
 ```
 
-**Not:** `DCTBlockPanel`'in şu an `delta` prop'u yok. Fatmanur eklediğinde sen kullanacaksın. Bu görev **ona bağımlı** — önce Fatmanur ile koordine et veya sen bir override yap (`DCTBlockPanel` source'unu local'de kopyala, prop ekle).
+**Nasıl yapılır:**
+- `src/app/lib/imageTypeProfiles.ts` dosyasını import et:
+```tsx
+import { getProfile } from '../lib/imageTypeProfiles';
+```
+- `IMAGE_TYPES.map(...)` döngüsünün altında, seçili tip için `getProfile(file.imageType)` çağırıp dönen `profile.method`, `profile.waveletFilter`, vb. değerleri minimal bir `<div>` içinde göster.
+- Renk için `profile.accent` kullan.
 
-### Görev B — Lossless durumunu daha belirgin yap
+### Görev B — `/preprocessing` sayfasını sahiplen ve genişlet
 
-**Dosya:** `src/app/pages/QuantizationPage.tsx`
+**Dosya:** `src/app/pages/PreprocessingPage.tsx`
+**Şu an:** Sadece **Color Space** seçimi var (YCbCr / RGB / Luma). Sağda kanal görselleştirmesi var.
 
-Lossless toggle açıkken:
-- Step size slider grileşsin (zaten var, ama opacity 0.5 → 0.3 yap)
-- Quality scale gradient'ında handle'ı **leaf yeşili** yap, "LOSSLESS" yazısı çıksın
-- "Quality preview" sayılarını "∞ dB" / "2.4:1" yerine animasyonlu serif ital yazıyla göster
+**Eklenecek 3 şey:**
 
-### Görev C — `/entropy` sayfasını sahiplen ve genişlet
-
-**Dosya:** `src/app/pages/EntropyPage.tsx`
-
-**Şu an:** Coder seçici (3 seçenek) + canlı bpp/CR kart + sembol frekans bar chart. Pre-coder Options bölümü kaldırıldı.
-
-**Eklenecek 4 şey:**
-
-#### C.1 — TypePresetBanner ekle (sayfanın üstüne)
+#### B.1 — TypePresetBanner ekle (sayfanın en üstüne)
 ```tsx
 import { TypePresetBanner } from '../components/TypePresetBanner';
 
+// JSX içinde, PipelineStepper'dan hemen sonra:
 <TypePresetBanner
-  stage="entropy"
-  onApply={(p) => setSettings(s => ({ ...s, coder: p.coder }))}
+  stage="transform"   // preprocessing için 'transform' kullan, color space önerisi metoda yakın
+  onApply={(p) => setSettings(s => ({ ...s, colorSpace: p.colorSpace }))}
 />
 ```
+Bu banner: "Trained preset · AI Generated · YCbCr" gibi öneri gösterir, tek tıkla uygulanır.
 
-#### C.2 — Bar chart rengini coder'a göre değiştir
-Şu an mavi gradyan. Seçili coder'a göre:
-- Default Huffman → klein
-- Custom Huffman → leaf
-- Arithmetic → plum
+#### B.2 — Sağ panele histogram mini chart ekle
+**Channel Decomposition** kartının altına bir **Luma Histogram** kartı ekle. Mock veri yeterli:
 
 ```tsx
-const coderColor = {
-  'huffman-default': 'var(--klein)',
-  'huffman-custom':  'var(--leaf)',
-  'arithmetic':      'var(--plum)',
-}[settings.coder];
+const HIST = [4, 8, 14, 22, 35, 48, 62, 78, 88, 92, 85, 70, 52, 38, 22, 12]; // 16 bin
 
-// Bar style:
-background: `linear-gradient(180deg, ${coderColor} 0%, ${coderColor}66 100%)`,
-```
-
-#### C.3 — Estimated bitstream size kartı
-Sağ panele yeni bir alt-kart: **estimated payload in KB**.
-
-```tsx
-// Mock: 1024×1024 image
-const estimatedKB = Math.round((1024 * 1024 * bpp) / (8 * 1024));
-
-<div style={{ marginTop: 14, padding: '14px 16px', background: 'var(--paper-2)', border: '1px solid var(--rule)', borderRadius: 'var(--r-md)' }}>
-  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.18em', color: 'var(--ink-3)', textTransform: 'uppercase', marginBottom: 6 }}>
-    Estimated Bitstream
+<div className="sp-card" style={{ overflow: 'hidden' }}>
+  <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--rule)' }}>
+    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.22em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>
+      LUMA HISTOGRAM · POST-PREPROC
+    </span>
   </div>
-  <div style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 28, color: 'var(--ink)' }}>
-    {estimatedKB}<span style={{ fontFamily: 'var(--font-mono)', fontStyle: 'normal', fontSize: 11, color: 'var(--klein)', marginLeft: 6 }}>KB</span>
-  </div>
-  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--ink-4)', marginTop: 4 }}>
-    1024 × 1024 · {bpp} bpp
+  <div style={{ padding: 20 }}>
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 100 }}>
+      {HIST.map((h, i) => (
+        <div key={i} style={{
+          flex: 1,
+          height: `${h}%`,
+          background: 'var(--klein)',
+          opacity: 0.3 + (h / 100) * 0.7,
+          borderRadius: '2px 2px 0 0',
+        }} />
+      ))}
+    </div>
+    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8,
+      fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-4)' }}>
+      <span>0</span><span>128</span><span>255</span>
+    </div>
   </div>
 </div>
 ```
 
-#### C.4 — Coder formula card
-Sayfa altına küçük bir bilgi kartı: **"Why these matter"**.
+**Bonus:** Color space değişince histogram yüksekliklerini biraz farklılaştır (`useMemo` ile `colorSpace`'e göre).
 
-```
-Default Huffman   ─ static tables, no per-image overhead, 5-10% over arithmetic
-Custom Huffman    ─ optimized for this specimen, 4-32 byte table overhead
-Arithmetic        ─ continuous fraction encoding, theoretical optimum
-```
+#### B.3 — Auto-tuned mode toggle
+LocalStorage'a `{ colorSpace, autoTuned }` yaz. `autoTuned: true` iken color space seçimi disabled olsun, `Apply preset` ile gelen değer kilitli kalsın. Üstte küçük bir uyarı göster: "Auto-tuned for AI Generated".
 
 ---
 
@@ -148,20 +130,16 @@ npm run dev
 ```
 
 Test senaryosu:
-1. `/quantization` → Δ slider'ı 1'den 64'e oynat
-   - **CR önizlemesi her zaman ≥ 16:1** (kontrol et!)
-   - Δ=64'te PSNR < 18 dB
-   - Lossless aç → CR ≈ 2.4:1, PSNR = ∞
-2. `/entropy` → coder değiştir
-   - bar chart rengi değişiyor mu?
-   - Estimated KB güncelleniyor mu?
-3. Pipeline akışı: `/quantization` → "Next: Entropy" → `/entropy` → "Next: Process" → `/processing` (otomatik geçiş)
-4. TypePresetBanner: AI Generated tipinde "Apply preset" → coder = Custom Huffman olmalı
+1. `/upload` aç → "AI Generated" tip seç → trained preset preview çıktı mı?
+2. "Next: Preprocess" → `/preprocessing` aç
+3. TypePresetBanner görünüyor mu? "Apply preset" tıklanınca color space değişiyor mu?
+4. Histogram render oluyor mu?
+5. Dev tools → Application → Local Storage → `spectra_preprocessing` doğru kaydediliyor mu?
 
-Build:
+Build test:
 ```bash
-npx tsc --noEmit
-npm run build
+npx tsc --noEmit     # type errors yok
+npm run build        # vite build temiz
 ```
 
 ---
@@ -169,32 +147,31 @@ npm run build
 ## 📤 4. Commit & push
 
 ```bash
-git add src/app/pages/QuantizationPage.tsx src/app/pages/EntropyPage.tsx
-git commit -m "feat(quantize+entropy): live matrix preview, color-coded bars, payload estimate"
-git push origin feature/quantization-berfin
+git add src/app/pages/UploadPage.tsx src/app/pages/PreprocessingPage.tsx
+git commit -m "feat(upload+preproc): AI Generated preset preview + histogram"
+git push origin feature/upload-guldeniz
 ```
 
-PR aç: `feature/quantization-berfin` → `main`
+Sonra GitHub'da → **Pull Requests** → **New PR** → `feature/upload-guldeniz` → `main` → açıklama yaz, Ezgi'ye review iste.
 
 ---
 
 ## 🆘 Takıldığında
 
-- **CR < 16 hesaplıyorsa formül senin değişmiş demektir** — `estimateMetrics` fonksiyonunu kontrol et:
-  ```ts
-  const baseCR = 16 + Math.pow(stepSize / 64, 0.85) * 64;
-  ```
-- **DCTBlockPanel `delta` prop'u yok diyor:** Fatmanur'un ekran ekran cevabını bekle veya sen bir kopyasını al
-- **TypePresetBanner sayfada görünmüyor:** localStorage'da `spectra_upload` boş → önce Upload'da görsel yükle
+- **Tip hatası alıyorsun:** `npx tsc --noEmit` çıktısını WhatsApp grubuna at
+- **CSS değişkenleri çalışmıyor:** `var(--klein)`, `var(--paper-2)` gibi kullan; `--klein` doğrudan değil
+- **Banner gözükmüyor:** localStorage'da `spectra_upload` boşsa banner null döner — önce `/upload`'da bir görsel yükle
+- **Preset uygulayınca eski seçim kalıyor:** `setSettings` callback'inde eski state'i koru ama yeni değerleri override et
+
+Sorularını **WhatsApp grubuna at**, code-pasted screenshot ile birlikte. Ezgi her gün PR review yapıyor.
 
 ---
 
 ## 📚 Yararlı dosyalar
 
-- `src/app/pages/QuantizationPage.tsx` — senin orijinal sayfan
-- `src/app/pages/EntropyPage.tsx` — yeni, senin sayfan
-- `src/app/lib/imageTypeProfiles.ts` — sadece okuma
-- `src/app/components/TypePresetBanner.tsx` — hazır
-- `TASKS_V2.md` — ekip roadmap'i
+- `src/app/lib/imageTypeProfiles.ts` — 5 tipin trained preset'i (sen sadece okuyacaksın, değiştirme)
+- `src/app/components/TypePresetBanner.tsx` — hazır banner bileşeni
+- `src/app/pages/PreprocessingPage.tsx` — senin yeni sayfan
+- `TASKS_V2.md` (main'de) — tüm ekibin genel roadmap'i
 
-İyi çalışmalar! 📊
+İyi çalışmalar! 🚀
