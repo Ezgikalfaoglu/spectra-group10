@@ -24,7 +24,7 @@ export function DWTSubbandsViz({ level = 3, active = true }: { level?: number; a
   }: { depth: number; maxDepth: number }) => {
     const isLast = depth === maxDepth;
     const delay = depth * 0.2;
-    const showValues = depth === 1;
+    const showValues = true;
 
     const cellClasses = 'relative overflow-hidden rounded-md border border-cyan-300/70';
 

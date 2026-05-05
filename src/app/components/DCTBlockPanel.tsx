@@ -8,10 +8,10 @@
  * "Practical Fast 1-D DCT Algorithms" and most JPEG textbooks.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowRight, Sigma } from 'lucide-react';
 
-/* ── Standard JPEG 8×8 luminance block ── */
+/* ── Fallback textbook block: shown when no upload is available ── */
 const PIXELS: number[][] = [
   [ 52,  55,  61,  66,  70,  61,  64,  73 ],
   [ 63,  59,  66,  90, 109,  85,  69,  72 ],
@@ -23,7 +23,6 @@ const PIXELS: number[][] = [
   [ 87,  79,  69,  68,  65,  76,  78,  94 ],
 ];
 
-/* ── Corresponding 2-D DCT coefficients (after −128 level shift) ── */
 const DCT: number[][] = [
   [ -415,  -29,  -62,   25,   55,  -20,   -1,    0 ],
   [    8,  -22,  -61,   10,   13,   -7,   -9,    5 ],
@@ -35,12 +34,76 @@ const DCT: number[][] = [
   [    0,    0,   -1,   -4,   -1,    0,    1,    2 ],
 ];
 
-const MAX_DCT_ABS = 415;
+/* Load image, extract centered 8×8 grayscale (BT.601 luma) via canvas */
+function extract8x8Luma(dataUrl: string): Promise<number[][]> {
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+    img.onload = () => {
+      if (img.width < 8 || img.height < 8) {
+        reject(new Error('image too small'));
+        return;
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('canvas unavailable'));
+        return;
+      }
+      ctx.drawImage(img, 0, 0);
+      const ox = Math.floor((img.width - 8) / 2);
+      const oy = Math.floor((img.height - 8) / 2);
+      try {
+        const data = ctx.getImageData(ox, oy, 8, 8).data;
+        const out: number[][] = [];
+        for (let y = 0; y < 8; y++) {
+          const row: number[] = [];
+          for (let x = 0; x < 8; x++) {
+            const i = (y * 8 + x) * 4;
+            const luma = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+            row.push(luma);
+          }
+          out.push(row);
+        }
+        resolve(out);
+      } catch (e) {
+        reject(e);
+      }
+    };
+    img.onerror = () => reject(new Error('image load failed'));
+    img.src = dataUrl;
+  });
+}
+
+/* Forward 2D DCT-II with −128 level shift; integer rounded */
+function dct8x8(pixels: number[][]): number[][] {
+  const N = 8;
+  const shifted = pixels.map((row) => row.map((v) => v - 128));
+  const result: number[][] = Array.from({ length: N }, () => new Array(N).fill(0));
+  for (let u = 0; u < N; u++) {
+    for (let v = 0; v < N; v++) {
+      let sum = 0;
+      for (let x = 0; x < N; x++) {
+        for (let y = 0; y < N; y++) {
+          sum +=
+            shifted[x][y] *
+            Math.cos(((2 * x + 1) * u * Math.PI) / 16) *
+            Math.cos(((2 * y + 1) * v * Math.PI) / 16);
+        }
+      }
+      const cu = u === 0 ? 1 / Math.SQRT2 : 1;
+      const cv = v === 0 ? 1 / Math.SQRT2 : 1;
+      result[u][v] = Math.round(0.25 * cu * cv * sum);
+    }
+  }
+  return result;
+}
 
 /* round(F / Δ) · Δ → dequantised matrix; HF cluster collapses to 0 */
-function quantizeDct(delta: number) {
+function quantizeDct(dct: number[][], delta: number) {
   const safeDelta = Math.max(1, delta);
-  return DCT.map((row) => row.map((v) => Math.round(v / safeDelta) * safeDelta));
+  return dct.map((row) => row.map((v) => Math.round(v / safeDelta) * safeDelta));
 }
 
 function pixelBg(v: number) {
@@ -48,15 +111,15 @@ function pixelBg(v: number) {
   return `rgb(${c}, ${c}, ${c})`;
 }
 
-function dctBg(v: number) {
-  const intensity = Math.min(1, Math.abs(v) / MAX_DCT_ABS);
+function dctBg(v: number, maxAbs: number) {
+  const intensity = Math.min(1, Math.abs(v) / maxAbs);
   if (v < 0) return `rgba(75, 30, 122, ${0.06 + intensity * 0.55})`;
   if (v > 0) return `rgba(30, 42, 255, ${0.06 + intensity * 0.55})`;
   return 'var(--paper-2)';
 }
 
-function dctTextColor(v: number) {
-  const intensity = Math.min(1, Math.abs(v) / MAX_DCT_ABS);
+function dctTextColor(v: number, maxAbs: number) {
+  const intensity = Math.min(1, Math.abs(v) / maxAbs);
   if (intensity > 0.55) return 'white';
   if (Math.abs(v) === 0) return 'var(--ink-4)';
   return 'var(--ink-1)';
@@ -69,11 +132,40 @@ export function DCTBlockPanel({ delta: externalDelta }: { delta?: number } = {})
   const [previewQ, setPreviewQ] = useState(false);
   const [internalDelta, setInternalDelta] = useState(8);
   const [hovered, setHovered] = useState<HoverCell | null>(null);
+  const [livePixels, setLivePixels] = useState<number[][] | null>(null);
+  const [liveDct, setLiveDct] = useState<number[][] | null>(null);
+
+  /* On mount: read uploaded image, extract 8×8 luma, compute live DCT */
+  useEffect(() => {
+    let cancelled = false;
+    try {
+      const raw = localStorage.getItem('spectra_upload');
+      if (!raw) return;
+      const upload = JSON.parse(raw);
+      const dataUrl: string | undefined = upload?.dataUrl;
+      if (!dataUrl) return;
+      extract8x8Luma(dataUrl)
+        .then((pixels) => {
+          if (cancelled) return;
+          setLivePixels(pixels);
+          setLiveDct(dct8x8(pixels));
+        })
+        .catch(() => { /* fallback to textbook block */ });
+    } catch { /* ignore parse errors → fallback */ }
+    return () => { cancelled = true; };
+  }, []);
+
+  const pixels = livePixels ?? PIXELS;
+  const dct = liveDct ?? DCT;
+  const maxDctAbs = Math.max(1, ...dct.flat().map((v) => Math.abs(v)));
+  const dctMin = Math.min(...dct.flat());
+  const dctMax = Math.max(...dct.flat());
+  const isLive = livePixels !== null;
 
   const showQuantized = isControlled ? externalDelta! > 1 : previewQ;
   const delta = isControlled ? externalDelta! : internalDelta;
   const effectiveDelta = showQuantized ? delta : 1;
-  const quantized = quantizeDct(effectiveDelta);
+  const quantized = quantizeDct(dct, effectiveDelta);
   const zeroCount = quantized.flat().filter((v) => v === 0).length;
   const zeroPct = Math.round((zeroCount / 64) * 100);
 
@@ -150,8 +242,8 @@ export function DCTBlockPanel({ delta: externalDelta }: { delta?: number } = {})
         {/* Pixel block */}
         <BlockGrid
           title="Pixel block · f(x,y)"
-          subtitle="Luma samples · 0–255"
-          values={PIXELS}
+          subtitle={isLive ? 'Luma samples · live · 0–255' : 'Luma samples · 0–255'}
+          values={pixels}
           bgFn={pixelBg}
           textFn={(v) => (v > 128 ? 'var(--ink)' : 'white')}
           accent="var(--ink)"
@@ -180,10 +272,14 @@ export function DCTBlockPanel({ delta: externalDelta }: { delta?: number } = {})
         {/* DCT block — hoverable */}
         <BlockGrid
           title={showQuantized ? 'Quantized coeffs · q(u,v)·Δ' : 'DCT coeffs · F(u,v)'}
-          subtitle={showQuantized ? `Δ = ${delta} · ${zeroPct}% zeros` : 'Frequency · −415..+77'}
-          values={showQuantized ? quantized : DCT}
-          bgFn={dctBg}
-          textFn={dctTextColor}
+          subtitle={
+            showQuantized
+              ? `Δ = ${delta} · ${zeroPct}% zeros`
+              : `Frequency · ${dctMin}..${dctMax > 0 ? '+' + dctMax : dctMax}`
+          }
+          values={showQuantized ? quantized : dct}
+          bgFn={(v) => dctBg(v, maxDctAbs)}
+          textFn={(v) => dctTextColor(v, maxDctAbs)}
           accent="var(--klein)"
           highlightDC
           onCellEnter={(ri, ci, v, e) => {
@@ -206,7 +302,7 @@ export function DCTBlockPanel({ delta: externalDelta }: { delta?: number } = {})
           {
             tag: 'DC',
             color: 'var(--klein)',
-            text: <>F(0,0) = <strong>−415</strong> · the block's mean luma after level-shift, scaled by ⅛. Carries most of the energy.</>,
+            text: <>F(0,0) = <strong>{dct[0][0]}</strong> · the block's mean luma after level-shift, scaled by ⅛. Carries most of the energy.</>,
           },
           {
             tag: 'LF',
