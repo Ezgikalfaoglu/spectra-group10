@@ -163,7 +163,7 @@ export function UploadPage() {
   const [file, setFile] = useState<UploadedFile | null>(null);
   const [isDemo, setIsDemo] = useState(false);
 
-  /* ── Restore saved upload OR fall back to demo mode ── */
+  /* ── Restore saved upload only — no demo auto-load ── */
   useEffect(() => {
     const saved = localStorage.getItem('spectra_upload');
 
@@ -179,9 +179,10 @@ export function UploadPage() {
       }
     }
 
-    setFile(DEMO_FILE);
-    setPageState('uploaded');
-    setIsDemo(true);
+    // No saved upload → leave dropzone idle, user uploads their own image
+    setFile(null);
+    setPageState('idle');
+    setIsDemo(false);
   }, []);
 
   const processFile = useCallback(
