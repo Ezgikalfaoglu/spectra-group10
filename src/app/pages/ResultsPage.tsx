@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router';
 import { motion } from 'motion/react';
 import {
-  Download, RefreshCw, AlertCircle,
+  Download, RefreshCw, AlertCircle, FileDown,
   TrendingUp, Activity, Cpu, Layers
 } from 'lucide-react';
 import {
@@ -72,20 +72,63 @@ export function ResultsPage() {
   const [lastResult, setLastResult] = useState<typeof DEMO_RESULT | null>(null);
   const [compareMode, setCompareMode] = useState<ComparisonMode>('split');
   const handleDownloadJSON = () => {
-  const blob = new Blob(
-    [JSON.stringify(currentResult, null, 2)],
-    { type: 'application/json' }
-  );
+    const blob = new Blob(
+      [JSON.stringify(currentResult, null, 2)],
+      { type: 'application/json' }
+    );
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'spectra-result.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
-  const url = URL.createObjectURL(blob);
+  // Re-encode the source image at a quality derived from the current step size
+  // — emulates the size reduction the pipeline reports.
+  const handleDownloadCompressed = async () => {
+    const src = currentResult.imageDataUrl || DEMO_IMAGE;
+    const isJ2K = (currentResult.method || '').toLowerCase().includes('2000');
+    const step = currentResult.stepSize ?? 18;
 
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'spectra-result.json';
-  a.click();
+    // step ∈ [1..40] → quality ∈ [0.95 .. 0.10]; J2K ~5% better at same step
+    const baseQ = Math.max(0.10, Math.min(0.95, 1 - (step / 44)));
+    const quality = isJ2K ? Math.min(0.95, baseQ + 0.05) : baseQ;
 
-  URL.revokeObjectURL(url);
-};
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth || 1024;
+      canvas.height = img.naturalHeight || 1024;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const baseName = (currentResult.imageName || 'specimen').replace(/\.[^.]+$/, '');
+        const labelMethod = isJ2K ? 'jpeg2000' : 'jpeg';
+        a.href = url;
+        a.download = `${baseName}_${labelMethod}_q${Math.round(quality * 100)}_cr${currentResult.cr}.jpg`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }, 'image/jpeg', quality);
+    };
+    img.onerror = () => {
+      // Source unreachable (e.g. CORS demo image) — fall back to dataURL fetch
+      try {
+        const a = document.createElement('a');
+        a.href = src;
+        a.download = `${currentResult.imageName || 'specimen'}.jpg`;
+        a.click();
+      } catch {
+        /* ignore */
+      }
+    };
+    img.src = src;
+  };
 
   useEffect(() => {
     const stored = localStorage.getItem('lastResult');
@@ -146,13 +189,29 @@ export function ResultsPage() {
             {isDemo ? 'Demo specimen · run a compression for real results' : `Specimen: ${result.imageName}`}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <Link to="/upload" className="sp-btn sp-btn-klein sp-btn-sm">
             <RefreshCw style={{ width: 12, height: 12 }} />
             New Run
           </Link>
-          <button onClick={handleDownloadJSON}className="sp-btn sp-btn-ghost sp-btn-sm">
-          <Download style={{ width: 12, height: 12 }} />
+          <button
+            onClick={handleDownloadCompressed}
+            disabled={isDemo}
+            className="sp-btn sp-btn-sm"
+            style={{
+              background: isDemo ? 'var(--paper-2)' : 'var(--ink)',
+              color: isDemo ? 'var(--ink-4)' : 'var(--paper)',
+              border: 'none',
+              cursor: isDemo ? 'not-allowed' : 'pointer',
+              opacity: isDemo ? 0.55 : 1,
+            }}
+            title={isDemo ? 'Run a real compression first' : 'Download the re-encoded image'}
+          >
+            <FileDown style={{ width: 12, height: 12 }} />
+            Compressed Image
+          </button>
+          <button onClick={handleDownloadJSON} className="sp-btn sp-btn-ghost sp-btn-sm">
+            <Download style={{ width: 12, height: 12 }} />
             JSON
           </button>
         </div>

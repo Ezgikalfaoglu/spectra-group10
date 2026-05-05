@@ -2,7 +2,7 @@ import { motion } from 'motion/react';
 import { TrendingUp, TrendingDown, Lightbulb, Target } from 'lucide-react';
 
 type Metric = { mse: number; psnr: number; cr: string; sparsity: string };
-type Cfg = { method: string; waveletFilter?: string; decompositionLevel?: number; stepSize: number; quantizationType: string };
+type Cfg = { method?: string; waveletFilter?: string; decompositionLevel?: number; stepSize?: number; quantizationType?: string };
 
 export function InsightCard({ metrics, cfg, compareMethod }: {
   metrics: Metric;
@@ -12,13 +12,15 @@ export function InsightCard({ metrics, cfg, compareMethod }: {
   const qualityScore = Math.min(100, Math.max(0, ((metrics.psnr - 20) / 25) * 100));
   const qualityLabel = metrics.psnr >= 35 ? 'Excellent' : metrics.psnr >= 30 ? 'Nominal' : 'Suboptimal';
 
-  const isJ2K = cfg.method.toLowerCase().includes('2000');
+  const method = cfg.method ?? 'JPEG2000';
+  const stepSize = cfg.stepSize ?? 18;
+  const isJ2K = method.toLowerCase().includes('2000');
   const mseDelta = compareMethod ? ((compareMethod.mse - metrics.mse) / compareMethod.mse) * 100 : 0;
   const psnrDelta = compareMethod ? metrics.psnr - compareMethod.psnr : 0;
 
   const suggestions: { icon: typeof Lightbulb; text: string }[] = [];
   if (metrics.psnr < 30) {
-    suggestions.push({ icon: TrendingDown, text: `Step size ${cfg.stepSize} is aggressive. Try ${Math.max(2, Math.round(cfg.stepSize / 2))} for higher PSNR.` });
+    suggestions.push({ icon: TrendingDown, text: `Step size ${stepSize} is aggressive. Try ${Math.max(2, Math.round(stepSize / 2))} for higher PSNR.` });
   }
   if (isJ2K && (cfg.decompositionLevel ?? 0) < 3) {
     suggestions.push({ icon: Lightbulb, text: `Increase decomposition level to 3–4 for finer wavelet sub-bands and better sparsity.` });
@@ -27,12 +29,12 @@ export function InsightCard({ metrics, cfg, compareMethod }: {
     suggestions.push({ icon: Lightbulb, text: `Try db4 wavelet for smoother natural images — Haar is better for binary/fingerprint data.` });
   }
   if (metrics.psnr >= 35 && suggestions.length === 0) {
-    suggestions.push({ icon: Target, text: `Configuration is near-optimal. Push step size to ${cfg.stepSize + 4} for higher compression while staying above 30 dB.` });
+    suggestions.push({ icon: Target, text: `Configuration is near-optimal. Push step size to ${stepSize + 4} for higher compression while staying above 30 dB.` });
   }
 
   const narrative = isJ2K
     ? `JPEG2000 with ${cfg.waveletFilter} at level ${cfg.decompositionLevel} produced ${qualityLabel.toLowerCase()} fidelity. The ${cfg.quantizationType} quantizer preserved dominant wavelet coefficients while zeroing out ${metrics.sparsity} — ideal for multi-resolution reconstruction.`
-    : `JPEG (DCT) achieved ${qualityLabel.toLowerCase()} quality at step ${cfg.stepSize}. Block-based 8×8 transform is fast but may introduce visible blocking at step > 20.`;
+    : `JPEG (DCT) achieved ${qualityLabel.toLowerCase()} quality at step ${stepSize}. Block-based 8×8 transform is fast but may introduce visible blocking at step > 20.`;
 
   return (
     <motion.div
