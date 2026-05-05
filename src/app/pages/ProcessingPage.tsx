@@ -31,6 +31,7 @@ export function ProcessingPage() {
   const [params] = useSearchParams();
   
   const [upload, setUpload] = useState<any>(null);
+  const [config, setConfig] = useState<any>(null); // Önceki sayfadan gelen ayarlar
   const [currentStep, setCurrentStep] = useState(-1);
   const [status, setStatus] = useState<'processing' | 'done' | 'error'>('processing');
   const [error, setError] = useState<{stage: number, msg: string} | null>(null);
@@ -41,10 +42,21 @@ export function ProcessingPage() {
   const profile = useMemo(() => (upload ? getProfile(upload.imageType) : null), [upload]);
 
   useEffect(() => {
-    const u = localStorage.getItem('spectra_upload');
-    if (!u) { navigate('/'); return; }
-    const uploadData = JSON.parse(u);
+    // 🔗 BAĞLANTI NOKTASI: Önceki sayfadan gelen verileri çekiyoruz
+    const rawUpload = localStorage.getItem('spectra_upload');
+    const rawConfig = localStorage.getItem('spectra_config'); // Ayarlar burada
+
+    if (!rawUpload) {
+      console.error("No upload data found, redirecting...");
+      navigate('/'); 
+      return;
+    }
+
+    const uploadData = JSON.parse(rawUpload);
+    const configData = rawConfig ? JSON.parse(rawConfig) : { method: 'JPEG2000' };
+    
     setUpload(uploadData);
+    setConfig(configData);
 
     let isCancelled = false;
 
@@ -57,33 +69,31 @@ export function ProcessingPage() {
           return;
         }
         setCurrentStep(i);
+        // Dinamik metrik simülasyonu
         if (i === 4) setMetrics((p: any) => ({ ...p, mse: 42.73, psnr: 31.82 }));
         if (i === 6) setMetrics((p: any) => ({ ...p, cr: 64.2, sparsity: 85 }));
+        
         await new Promise(r => setTimeout(r, STEP_DURATION));
       }
-      handleFinish(uploadData);
+      handleFinish(uploadData, configData);
     };
 
     runPipeline();
     return () => { isCancelled = true; };
   }, [failAt, navigate]);
 
-  const handleFinish = (uploadData: any) => {
+  const handleFinish = (uploadData: any, configData: any) => {
     setStatus('done');
-    // InsightCard bileşeninin çökmemesi için 'cfg' objesi eklendi
     const result = {
       ...metrics,
       id: Date.now().toString(),
       date: new Date().toISOString(),
       imageName: uploadData.name,
       imageDataUrl: uploadData.dataUrl,
-      method: "JPEG2000",
-      cfg: { 
-        method: "JPEG2000",
-        waveletFilter: "db4",
-        decompositionLevel: 3 
-      }
+      method: configData.method || "JPEG2000",
+      cfg: configData // InsightCard'ın beklediği config objesi
     };
+    
     localStorage.setItem("lastResult", JSON.stringify(result));
     const history = JSON.parse(localStorage.getItem("compressionHistory") || "[]");
     history.unshift(result);
@@ -111,11 +121,10 @@ export function ProcessingPage() {
                   <AlertTriangle className="mb-4" size={48} color="#d4574c" />
                   <h3 className="text-2xl font-serif mb-2">Pipeline Halted</h3>
                   <p className="font-mono text-xs text-red-400 mb-6">{error?.msg}</p>
-                  <button onClick={() => window.location.reload()} className="sp-btn sp-btn-klein">Retry from start</button>
+                  <button onClick={() => navigate('/')} className="sp-btn sp-btn-klein">Return to Upload</button>
                 </motion.div>
               ) : status === 'done' ? (
                 <motion.div key="done" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center">
-                  {/* Tik Sembolü Done Yazısının Üstünde */}
                   <CheckCircle2 className="text-[var(--leaf)] mb-4" size={64} />
                   <h2 className="text-5xl font-serif mb-2 text-[var(--leaf)]">Done.</h2>
                   <p className="text-sm text-gray-400 font-mono italic">Redirecting to results in {countdown}s...</p>
@@ -137,7 +146,6 @@ export function ProcessingPage() {
             </AnimatePresence>
           </div>
 
-          {/* Task A: Dark Log Strip */}
           <div style={{
             padding: '24px', background: 'var(--ink)', color: 'var(--paper)',
             borderRadius: 'var(--r-md)', fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.8,
@@ -156,7 +164,6 @@ export function ProcessingPage() {
           </div>
         </div>
 
-        {/* Task D: Metrics */}
         <div className="space-y-4">
           {['MSE', 'PSNR', 'CR', 'Sparsity'].map((label) => {
             const val = metrics[label.toLowerCase()];
