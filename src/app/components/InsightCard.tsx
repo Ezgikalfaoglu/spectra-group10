@@ -70,7 +70,12 @@ export function InsightCard({ metrics, cfg, compareMethod }: {
       <div style={{ borderTop: '1px solid rgba(246,244,236,0.1)', paddingTop: 16, marginBottom: 16, position: 'relative' }}>
         <p style={{ fontFamily: 'var(--font-serif)', fontSize: 16, lineHeight: 1.5, color: 'rgba(246,244,236,0.85)', fontWeight: 400, letterSpacing: '-0.01em' }}>
           {narrative.split(cfg.waveletFilter || '__NONE__').map((part, i, arr) => (
-            i === arr.length - 1 ? part : <>{part}<em key={i} style={{ fontStyle: 'italic', color: 'var(--cyan)' }}>{cfg.waveletFilter}</em></>
+            <span key={i}>
+              {part}
+              {i < arr.length - 1 && (
+                <em style={{ fontStyle: 'italic', color: 'var(--cyan)' }}>{cfg.waveletFilter}</em>
+              )}
+            </span>
           ))}
         </p>
       </div>

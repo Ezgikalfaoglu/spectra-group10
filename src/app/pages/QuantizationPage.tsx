@@ -8,7 +8,7 @@
  *   • Live quality preview (estimated PSNR/CR display)
  *   • Reads localStorage["spectra_upload", "spectra_transform"]
  *   • Stores result in localStorage["spectra_quantization"]
- *   • Routes ← /transform  → /processing
+ *   • Routes ← /transform  → /entropy
  * ─────────────────────────────────────────────────────────
  */
 
@@ -148,7 +148,7 @@ export function QuantizationPage() {
       <div style={{ marginBottom: 36 }}>
         <div className="sp-eyebrow" style={{ marginBottom: 10 }}>
           <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--klein)', display: 'inline-block' }} />
-          STEP 03 · QUANTIZATION PARAMETERS
+          STEP 04 · QUANTIZATION PARAMETERS
         </div>
         <h1 style={{
           fontFamily: 'var(--font-serif)', fontSize: 'clamp(32px, 3vw, 52px)',

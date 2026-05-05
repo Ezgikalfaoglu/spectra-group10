@@ -14,7 +14,8 @@ import { ComparisonSlider, type ComparisonMode } from '../components/ComparisonS
 import { InsightCard } from '../components/InsightCard';
 import { BlockArtifactFilter } from "../components/BlockArtifactFilter";
 import { listProfiles } from '../lib/imageTypeProfiles';
-const DEMO_IMAGE = 'https://images.unsplash.com/photo-1581447547509-711eb65cd5f2?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxsYW5kc2NhcGUlMjBtb3VudGFpbiUyMGdyYXlzY2FsZSUyMG5hdHVyZXxlbnwxfHx8fDE3NzY3NjEzOTJ8MA&ixlib=rb-4.1.0&q=80&w=1080';
+/* Local SVG fallback — works offline, no CORS issues */
+const DEMO_IMAGE = 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="768" viewBox="0 0 1024 768"><defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1a3a5c"/><stop offset="60%" stop-color="#5a8fc4"/><stop offset="100%" stop-color="#e8c070"/></linearGradient><linearGradient id="lake" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#a0c0d8"/><stop offset="100%" stop-color="#1e3d5a"/></linearGradient></defs><rect width="1024" height="500" fill="url(#sky)"/><circle cx="780" cy="200" r="40" fill="#fad860" opacity="0.9"/><path d="M0,420 L120,300 L220,340 L340,260 L460,310 L580,280 L720,330 L860,290 L1024,310 L1024,500 L0,500 Z" fill="#3a4258"/><path d="M0,470 L160,380 L280,420 L420,360 L540,400 L680,370 L800,410 L1024,390 L1024,500 L0,500 Z" fill="#1e2438"/><rect y="500" width="1024" height="268" fill="url(#lake)"/><path d="M0,500 L160,580 L280,540 L420,620 L540,560 L680,610 L800,580 L1024,600 L1024,768 L0,768 Z" fill="#0d1f3a" opacity="0.6"/><text x="512" y="740" text-anchor="middle" font-family="monospace" font-size="14" fill="white" opacity="0.5" letter-spacing="3">DEMO SPECIMEN</text></svg>`);
 
 const DEMO_RESULT = {
   id: 'DEMO', date: new Date().toISOString(),
@@ -96,7 +97,10 @@ export function ResultsPage() {
     const quality = isJ2K ? Math.min(0.95, baseQ + 0.05) : baseQ;
 
     const img = new Image();
-    img.crossOrigin = 'anonymous';
+    // Only set crossOrigin for http(s) sources — data URLs are same-origin already
+    if (src.startsWith('http://') || src.startsWith('https://')) {
+      img.crossOrigin = 'anonymous';
+    }
     img.onload = () => {
       const canvas = document.createElement('canvas');
       canvas.width = img.naturalWidth || 1024;
@@ -104,28 +108,28 @@ export function ResultsPage() {
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob((blob) => {
-        if (!blob) return;
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        const baseName = (currentResult.imageName || 'specimen').replace(/\.[^.]+$/, '');
-        const labelMethod = isJ2K ? 'jpeg2000' : 'jpeg';
-        a.href = url;
-        a.download = `${baseName}_${labelMethod}_q${Math.round(quality * 100)}_cr${currentResult.cr}.jpg`;
-        a.click();
-        URL.revokeObjectURL(url);
-      }, 'image/jpeg', quality);
+      try {
+        canvas.toBlob((blob) => {
+          if (!blob) return;
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          const baseName = (currentResult.imageName || 'specimen').replace(/\.[^.]+$/, '');
+          const labelMethod = isJ2K ? 'jpeg2000' : 'jpeg';
+          // Sanitise CR (replace ":" → "x" for cross-platform filename safety)
+          const safeCR = String(currentResult.cr).replace(/[:/\\?*"<>|]/g, 'x');
+          a.href = url;
+          a.download = `${baseName}_${labelMethod}_q${Math.round(quality * 100)}_cr${safeCR}.jpg`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }, 'image/jpeg', quality);
+      } catch (err) {
+        // Tainted canvas (CORS-cross origin without proper headers) — bail out
+        console.error('Cannot export image — canvas is tainted', err);
+        alert('Cannot re-encode this image due to cross-origin restrictions. Upload a local file and try again.');
+      }
     };
     img.onerror = () => {
-      // Source unreachable (e.g. CORS demo image) — fall back to dataURL fetch
-      try {
-        const a = document.createElement('a');
-        a.href = src;
-        a.download = `${currentResult.imageName || 'specimen'}.jpg`;
-        a.click();
-      } catch {
-        /* ignore */
-      }
+      alert('Failed to load source image for re-encoding.');
     };
     img.src = src;
   };

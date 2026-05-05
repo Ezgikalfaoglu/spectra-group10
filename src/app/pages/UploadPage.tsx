@@ -42,7 +42,8 @@ interface UploadedFile {
   imageType: string;
 }
 
-const SUPPORTED_EXTS = ['png', 'jpg', 'jpeg', 'bmp', 'tif', 'tiff'];
+/* TIFF intentionally excluded — most browsers cannot render it as <img>. */
+const SUPPORTED_EXTS = ['png', 'jpg', 'jpeg', 'bmp'];
 
 const IMAGE_TYPES = [
   {
@@ -456,7 +457,7 @@ export function UploadPage() {
                 ref={fileInputRef}
                 type="file"
                 style={{ display: 'none' }}
-                accept=".png,.jpg,.jpeg,.bmp,.tif,.tiff"
+                accept=".png,.jpg,.jpeg,.bmp"
                 onChange={handleFileSelect}
               />
 
@@ -617,7 +618,7 @@ export function UploadPage() {
                             letterSpacing: '0.05em',
                           }}
                         >
-                          PNG · BMP · TIFF · JPG / JPEG
+                          PNG · BMP · JPG / JPEG
                         </p>
                       </div>
                     )}
@@ -810,8 +811,8 @@ export function UploadPage() {
                 letterSpacing: '0.02em',
               }}
             >
-              All images are processed in <strong>greyscale</strong>. TIFF and
-              BMP provide the cleanest baseline. Max recommended size:{' '}
+              All images are processed in <strong>greyscale</strong>. BMP and
+              PNG provide the cleanest baseline. Max recommended size:{' '}
               <strong>2048×2048 px</strong>.
             </p>
           </div>

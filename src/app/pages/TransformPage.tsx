@@ -97,7 +97,7 @@ export function TransformPage() {
     navigate('/quantization');
   };
 
-  const handleBack = () => navigate('/upload');
+  const handleBack = () => navigate('/preprocessing');
 
   const wavelet = WAVELET_INFO[settings.waveletFilter] ?? WAVELET_INFO['db4'];
 
@@ -114,7 +114,7 @@ export function TransformPage() {
       <div style={{ marginBottom: 36 }}>
         <div className="sp-eyebrow" style={{ marginBottom: 10 }}>
           <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--klein)', display: 'inline-block' }} />
-          STEP 02 · TRANSFORM METHOD
+          STEP 03 · TRANSFORM METHOD
         </div>
         <h1 style={{
           fontFamily: 'var(--font-serif)', fontSize: 'clamp(32px, 3vw, 52px)',
@@ -351,7 +351,7 @@ export function TransformPage() {
           {/* Navigation */}
           <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
             <button onClick={handleBack} className="sp-btn sp-btn-ghost" style={{ flex: 1, justifyContent: 'center' }}>
-              ← Upload
+              ← Preprocess
             </button>
             <button onClick={handleNext} className="sp-btn sp-btn-klein" style={{ flex: 2, justifyContent: 'center', gap: 8 }}>
               Next: Quantize

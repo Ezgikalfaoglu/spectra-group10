@@ -97,8 +97,10 @@ export function ProcessingPage() {
     setCurrentStep(0);
     setLogLines([]);
 
+    const timeouts: number[] = [];
+
     PIPELINE_STAGES.forEach((stage, idx) => {
-      setTimeout(() => {
+      const id = window.setTimeout(() => {
         if (failStep !== null && idx === failStep) {
           setErrorStage(idx);
           setIsRunning(false);
@@ -116,7 +118,7 @@ export function ProcessingPage() {
         ]);
 
         if (idx === PIPELINE_STAGES.length - 1) {
-          setTimeout(() => {
+          const finalId = window.setTimeout(() => {
             const r = computeResults(transform, quant, upload.imageType);
             setResults(r);
             setIsRunning(false);
@@ -147,29 +149,43 @@ export function ProcessingPage() {
               },
             };
 
-            const history = JSON.parse(localStorage.getItem('compressionHistory') || '[]');
-            history.unshift(entry);
-
-            localStorage.setItem('compressionHistory', JSON.stringify(history));
-            localStorage.setItem('lastResult', JSON.stringify(entry));
+            try {
+              const history = JSON.parse(localStorage.getItem('compressionHistory') || '[]');
+              history.unshift(entry);
+              localStorage.setItem('compressionHistory', JSON.stringify(history));
+              localStorage.setItem('lastResult', JSON.stringify(entry));
+            } catch (err) {
+              // localStorage quota exceeded — keep just the latest result
+              try {
+                localStorage.setItem('lastResult', JSON.stringify(entry));
+              } catch { /* ignore */ }
+            }
           }, 500);
+          timeouts.push(finalId);
         }
       }, idx * STEP_DURATION);
+      timeouts.push(id);
     });
+
+    return () => {
+      timeouts.forEach((id) => window.clearTimeout(id));
+    };
   }, [upload, transform, quant]);
 
   useEffect(() => {
     if (!isDone) return;
-
-    const t = setInterval(() => {
-      setCountdown((c) => {
-        if (c === 1) navigate('/results');
-        return c - 1;
-      });
+    const t = window.setInterval(() => {
+      setCountdown((c) => Math.max(0, c - 1));
     }, 1000);
-
-    return () => clearInterval(t);
+    return () => window.clearInterval(t);
   }, [isDone]);
+
+  // Separate effect for navigation, so setState updater never triggers a route change
+  useEffect(() => {
+    if (isDone && countdown === 0) {
+      navigate('/results');
+    }
+  }, [isDone, countdown, navigate]);
 
   const typeNote = upload?.imageType === 'Fingerprint'
     ? 'Lossless mode active — preserving every minutia for AFIS matching'
