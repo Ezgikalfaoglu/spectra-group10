@@ -31,6 +31,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '../components/ui/tooltip';
+import { getProfile } from '../lib/imageTypeProfiles';
 
 interface UploadedFile {
   name: string;
@@ -162,7 +163,7 @@ export function UploadPage() {
   const [file, setFile] = useState<UploadedFile | null>(null);
   const [isDemo, setIsDemo] = useState(false);
 
-  /* ── Restore saved upload OR fall back to demo mode ── */
+  /* ── Restore saved upload only — no demo auto-load ── */
   useEffect(() => {
     const saved = localStorage.getItem('spectra_upload');
 
@@ -178,9 +179,10 @@ export function UploadPage() {
       }
     }
 
-    setFile(DEMO_FILE);
-    setPageState('uploaded');
-    setIsDemo(true);
+    // No saved upload → leave dropzone idle, user uploads their own image
+    setFile(null);
+    setPageState('idle');
+    setIsDemo(false);
   }, []);
 
   const processFile = useCallback(
@@ -997,6 +999,147 @@ export function UploadPage() {
                   </motion.button>
                 );
               })}
+
+              {/* ── Spectra trained preset preview (per image type) ── */}
+              {file?.imageType && (() => {
+                const p = getProfile(file.imageType);
+                return (
+                  <motion.div
+                    key={p.type + '-preset'}
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.35 }}
+                    style={{
+                      marginTop: 6,
+                      padding: '14px 16px',
+                      borderRadius: 'var(--r-md)',
+                      background: `linear-gradient(135deg, ${p.accent}0D 0%, ${p.accent}1A 100%)`,
+                      border: `1px solid ${p.accent}3D`,
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        marginBottom: 8,
+                      }}
+                    >
+                      <Sparkles
+                        style={{
+                          width: 12,
+                          height: 12,
+                          color: p.accent,
+                        }}
+                      />
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 9.5,
+                          letterSpacing: '0.18em',
+                          color: p.accent,
+                          textTransform: 'uppercase',
+                          fontWeight: 600,
+                        }}
+                      >
+                        SPECTRA TRAINED PRESET
+                      </span>
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 8.5,
+                          letterSpacing: '0.14em',
+                          padding: '1.5px 7px',
+                          borderRadius: 100,
+                          background: `${p.accent}1F`,
+                          color: p.accent,
+                          border: `1px solid ${p.accent}55`,
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        {p.label}
+                      </span>
+                    </div>
+
+                    <p
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 10.5,
+                        color: 'var(--ink-2)',
+                        lineHeight: 1.55,
+                        marginBottom: 10,
+                      }}
+                    >
+                      {p.blurb}
+                    </p>
+
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(4, 1fr)',
+                        gap: 8,
+                      }}
+                    >
+                      {[
+                        {
+                          k: 'Method',
+                          v:
+                            p.method === 'jpeg2000'
+                              ? 'JPEG2000'
+                              : 'JPEG · DCT',
+                        },
+                        {
+                          k: 'Wavelet',
+                          v: `${p.waveletFilter} · L${p.decompositionLevel}`,
+                        },
+                        {
+                          k: 'Step',
+                          v: p.forceLossless
+                            ? 'lossless'
+                            : `Δ ${p.stepSize}`,
+                        },
+                        {
+                          k: 'CR ×',
+                          v: p.crBonus.toFixed(2),
+                        },
+                      ].map((row) => (
+                        <div
+                          key={row.k}
+                          style={{
+                            background: 'rgba(255,255,255,0.6)',
+                            border: '1px solid var(--rule-soft)',
+                            borderRadius: 'var(--r-sm)',
+                            padding: '7px 9px',
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: 8.5,
+                              letterSpacing: '0.16em',
+                              color: 'var(--ink-4)',
+                              textTransform: 'uppercase',
+                              marginBottom: 2,
+                            }}
+                          >
+                            {row.k}
+                          </div>
+                          <div
+                            style={{
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: 11,
+                              color: 'var(--ink)',
+                              fontWeight: 500,
+                            }}
+                          >
+                            {row.v}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                );
+              })()}
             </div>
           </div>
 

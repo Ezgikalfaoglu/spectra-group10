@@ -1,41 +1,128 @@
 /**
  * PREPROCESSING PAGE — Pipeline Stage 02
  * Color-space conversion and level shifting before transform.
+ *
+ * Iter-2 additions:
+ *   • Trained-preset banner (TypePresetBanner)
+ *   • autoTuned lock — colorSpace pinned to profile recommendation
+ *   • Mock luma histogram below channel decomposition
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shuffle, ArrowRight, Info } from 'lucide-react';
+import {
+  Shuffle,
+  ArrowRight,
+  Info,
+  Lock,
+  Unlock,
+  BarChart3,
+} from 'lucide-react';
 import { PipelineStepper } from '../components/PipelineStepper';
+import { TypePresetBanner } from '../components/TypePresetBanner';
+import { getProfile, type TypeProfile } from '../lib/imageTypeProfiles';
+
+type ColorSpace = 'ycbcr' | 'rgb' | 'luma';
 
 interface PreprocSettings {
-  colorSpace: 'ycbcr' | 'rgb' | 'luma';
+  colorSpace: ColorSpace;
+  autoTuned: boolean;
 }
 
 const DEFAULTS: PreprocSettings = {
   colorSpace: 'ycbcr',
+  autoTuned: true,
 };
 
-const COLOR_SPACES: { id: PreprocSettings['colorSpace']; label: string; desc: string }[] = [
+const COLOR_SPACES: { id: ColorSpace; label: string; desc: string }[] = [
   { id: 'ycbcr', label: 'YCbCr',     desc: 'Luma + chroma decorrelation. Standard JPEG / JPEG2000 baseline. Best energy compaction for natural images.' },
   { id: 'rgb',   label: 'RGB',       desc: 'No conversion — process channels directly. Higher fidelity at the cost of compression efficiency.' },
   { id: 'luma',  label: 'Luma only', desc: 'Discard chroma channels and process the grayscale plane. Compact but loses all color information.' },
 ];
 
+/* ── Mock 16-bucket luma histogram, biased per color-space ── */
+function mockHistogram(colorSpace: ColorSpace, imageType: string): number[] {
+  const seed = (imageType.length * 7 + colorSpace.length * 3) % 17;
+  const center =
+    colorSpace === 'ycbcr' ? 0.55 : colorSpace === 'rgb' ? 0.62 : 0.42;
+  const width = colorSpace === 'luma' ? 0.18 : 0.24;
+  const raw = Array.from({ length: 16 }, (_, i) => {
+    const x = (i + seed) / 16;
+    const v = Math.exp(-((x - center) ** 2) / (2 * width * width));
+    const noise = 0.08 * Math.sin(i * 1.7 + seed);
+    return Math.max(0.04, v + noise);
+  });
+  const max = Math.max(...raw);
+  return raw.map(v => v / max);
+}
+
 export function PreprocessingPage() {
   const navigate = useNavigate();
   const [settings, setSettings] = useState<PreprocSettings>(DEFAULTS);
+  const [imageType, setImageType] = useState<string>('Natural');
 
+  /* ── Hydrate from upload + previous preprocessing choice ── */
   useEffect(() => {
+    let resolvedType = 'Natural';
+
+    // 1. Read upload to discover the image type
+    const uploadRaw = localStorage.getItem('spectra_upload');
+    if (uploadRaw) {
+      try {
+        const u = JSON.parse(uploadRaw);
+        if (u?.imageType) resolvedType = u.imageType;
+      } catch { /* ignore */ }
+    }
+    setImageType(resolvedType);
+
+    // 2. Restore saved preprocessing if present, else seed from profile
     const saved = localStorage.getItem('spectra_preprocessing');
     if (saved) {
-      try { setSettings({ ...DEFAULTS, ...JSON.parse(saved) }); } catch {}
+      try {
+        const parsed = JSON.parse(saved);
+        setSettings({
+          colorSpace: (parsed?.colorSpace ?? DEFAULTS.colorSpace) as ColorSpace,
+          autoTuned: parsed?.autoTuned ?? DEFAULTS.autoTuned,
+        });
+        return;
+      } catch { /* ignore */ }
     }
+
+    // First visit → adopt the profile's color-space and lock it
+    const profile = getProfile(resolvedType);
+    setSettings({
+      colorSpace: profile.colorSpace as ColorSpace,
+      autoTuned: true,
+    });
   }, []);
 
-  const update = <K extends keyof PreprocSettings>(k: K, v: PreprocSettings[K]) =>
-    setSettings(s => ({ ...s, [k]: v }));
+  /* ── Persist on every change ── */
+  useEffect(() => {
+    localStorage.setItem('spectra_preprocessing', JSON.stringify(settings));
+  }, [settings]);
+
+  const profile = useMemo(() => getProfile(imageType), [imageType]);
+
+  const selectColorSpace = (cs: ColorSpace) => {
+    if (settings.autoTuned) return; // locked
+    setSettings(s => ({ ...s, colorSpace: cs }));
+  };
+
+  const applyPreset = (p: TypeProfile) => {
+    setSettings({ colorSpace: p.colorSpace as ColorSpace, autoTuned: true });
+  };
+
+  const toggleAutoTuned = () => {
+    setSettings(s => {
+      if (s.autoTuned) {
+        // unlock — keep current colorSpace
+        return { ...s, autoTuned: false };
+      }
+      // re-lock — snap back to profile recommendation
+      return { colorSpace: profile.colorSpace as ColorSpace, autoTuned: true };
+    });
+  };
 
   const handleNext = () => {
     localStorage.setItem('spectra_preprocessing', JSON.stringify(settings));
@@ -43,6 +130,11 @@ export function PreprocessingPage() {
   };
 
   const active = COLOR_SPACES.find(c => c.id === settings.colorSpace) ?? COLOR_SPACES[0];
+
+  const histogram = useMemo(
+    () => mockHistogram(settings.colorSpace, imageType),
+    [settings.colorSpace, imageType]
+  );
 
   return (
     <motion.div
@@ -54,7 +146,7 @@ export function PreprocessingPage() {
       <PipelineStepper />
 
       {/* Header */}
-      <div style={{ marginBottom: 36 }}>
+      <div style={{ marginBottom: 28 }}>
         <div className="sp-eyebrow" style={{ marginBottom: 10 }}>
           <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--klein)', display: 'inline-block' }} />
           STEP 02 · PREPROCESSING
@@ -71,6 +163,9 @@ export function PreprocessingPage() {
         </p>
       </div>
 
+      {/* Trained preset banner — surfaces the upcoming pipeline preset for the selected image type */}
+      <TypePresetBanner stage="transform" onApply={applyPreset} />
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, alignItems: 'start' }}>
 
         {/* LEFT: Controls */}
@@ -83,21 +178,45 @@ export function PreprocessingPage() {
                 <Shuffle style={{ width: 14, height: 14, color: 'var(--klein)' }} />
               </div>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.22em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>COLOR SPACE</span>
+
+              {settings.autoTuned && (
+                <span
+                  style={{
+                    marginLeft: 'auto',
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 600,
+                    letterSpacing: '0.14em', textTransform: 'uppercase',
+                    color: 'var(--leaf)',
+                    background: 'rgba(31,138,94,0.08)',
+                    border: '1px solid rgba(31,138,94,0.30)',
+                    padding: '2px 8px',
+                    borderRadius: 100,
+                  }}
+                >
+                  <Lock style={{ width: 10, height: 10 }} />
+                  AUTO-TUNED
+                </span>
+              )}
             </div>
+
             <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
               {COLOR_SPACES.map(cs => {
                 const isSelected = settings.colorSpace === cs.id;
+                const isLocked = settings.autoTuned && !isSelected;
                 return (
                   <motion.button
                     key={cs.id}
-                    onClick={() => update('colorSpace', cs.id)}
-                    whileHover={{ x: 2 }}
+                    onClick={() => selectColorSpace(cs.id)}
+                    disabled={isLocked}
+                    whileHover={!isLocked ? { x: 2 } : undefined}
                     style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                       padding: '14px 18px', borderRadius: 'var(--r-md)',
                       border: `1px solid ${isSelected ? 'rgba(30,42,255,0.35)' : 'var(--rule)'}`,
                       background: isSelected ? 'rgba(30,42,255,0.04)' : 'white',
-                      cursor: 'pointer', transition: 'all 0.18s', textAlign: 'left',
+                      cursor: isLocked ? 'not-allowed' : 'pointer',
+                      opacity: isLocked ? 0.5 : 1,
+                      transition: 'all 0.18s', textAlign: 'left',
                     }}
                   >
                     <div>
@@ -120,6 +239,29 @@ export function PreprocessingPage() {
                   </motion.button>
                 );
               })}
+
+              {/* Lock toggle */}
+              <button
+                onClick={toggleAutoTuned}
+                style={{
+                  marginTop: 4,
+                  alignSelf: 'flex-start',
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '7px 12px', borderRadius: 100,
+                  fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 500,
+                  letterSpacing: '0.12em', textTransform: 'uppercase',
+                  color: settings.autoTuned ? 'var(--ink-3)' : 'var(--klein)',
+                  background: 'transparent',
+                  border: `1px solid ${settings.autoTuned ? 'var(--rule)' : 'rgba(30,42,255,0.35)'}`,
+                  cursor: 'pointer',
+                  transition: 'all 0.18s',
+                }}
+              >
+                {settings.autoTuned
+                  ? (<><Unlock style={{ width: 11, height: 11 }} /> Manual override</>)
+                  : (<><Lock style={{ width: 11, height: 11 }} /> Re-lock to preset</>)
+                }
+              </button>
             </div>
           </div>
 
@@ -187,6 +329,65 @@ export function PreprocessingPage() {
                   </p>
                 </motion.div>
               </AnimatePresence>
+
+              {/* ── Luma histogram (mock) ── */}
+              <div style={{ marginTop: 20, paddingTop: 18, borderTop: '1px solid var(--rule-soft)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <BarChart3 style={{ width: 12, height: 12, color: 'var(--klein)' }} />
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.18em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>
+                    LUMA DISTRIBUTION
+                  </span>
+                  <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-4)', letterSpacing: '0.12em' }}>
+                    16 buckets · mock
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    position: 'relative',
+                    height: 80,
+                    background: 'var(--paper-2)',
+                    border: '1px solid var(--rule)',
+                    borderRadius: 'var(--r-sm)',
+                    padding: '8px 10px',
+                    display: 'flex',
+                    alignItems: 'flex-end',
+                    gap: 3,
+                  }}
+                >
+                  {histogram.map((v, i) => (
+                    <motion.div
+                      key={`${settings.colorSpace}-${i}`}
+                      initial={{ height: 0 }}
+                      animate={{ height: `${v * 100}%` }}
+                      transition={{ duration: 0.4, delay: i * 0.015 }}
+                      style={{
+                        flex: 1,
+                        background: 'linear-gradient(180deg, var(--klein) 0%, var(--klein-deep) 100%)',
+                        borderRadius: '2px 2px 0 0',
+                        opacity: 0.85,
+                        minHeight: 2,
+                      }}
+                    />
+                  ))}
+                </div>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    marginTop: 6,
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 8.5,
+                    color: 'var(--ink-4)',
+                    letterSpacing: '0.12em',
+                  }}
+                >
+                  <span>0</span>
+                  <span>luma intensity →</span>
+                  <span>255</span>
+                </div>
+              </div>
             </div>
           </div>
 
