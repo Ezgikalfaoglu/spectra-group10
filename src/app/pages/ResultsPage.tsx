@@ -8,7 +8,7 @@ import {
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer, RadarChart, Radar,
-  PolarGrid, PolarAngleAxis, PolarRadiusAxis, Cell
+  PolarGrid, PolarAngleAxis, PolarRadiusAxis, Cell, ReferenceDot, ReferenceLine,
 } from 'recharts';
 import { ComparisonSlider, type ComparisonMode } from '../components/ComparisonSlider';
 import { InsightCard } from '../components/InsightCard';
@@ -25,25 +25,27 @@ const DEMO_RESULT = {
   imageDataUrl: DEMO_IMAGE,
   settings: { method: 'jpeg2000', waveletFilter: 'db4', decompositionLevel: 3, quantizationType: 'scalar', stepSize: 18 },
 };
-const JPEG_DEMO = { ...DEMO_RESULT, method: 'JPEG', wavelet: '—', decompLevel: '—', mse: 78.4, psnr: 29.2, cr: '8.9:1', sparsity: '62%' };
-
+// PSNR: max(14, 38 - s*0.9); JPEG2000 ≈ JPEG + 2.6 dB
+// CR:   16 + (s/64)^0.85 * 64 for JPEG2000; JPEG ≈ ×0.85
 const CHART_DATA = [
-  { stepSize: 4,  jpegPSNR: 38.2, jpeg2000PSNR: 40.1 },
-  { stepSize: 8,  jpegPSNR: 35.1, jpeg2000PSNR: 37.4 },
-  { stepSize: 12, jpegPSNR: 33.2, jpeg2000PSNR: 35.7 },
-  { stepSize: 16, jpegPSNR: 31.8, jpeg2000PSNR: 34.1 },
-  { stepSize: 20, jpegPSNR: 29.4, jpeg2000PSNR: 32.3 },
-  { stepSize: 24, jpegPSNR: 27.8, jpeg2000PSNR: 30.5 },
-  { stepSize: 32, jpegPSNR: 25.2, jpeg2000PSNR: 28.1 },
+  { stepSize: 4,  jpegPSNR: 31.8, jpeg2000PSNR: 34.4 },
+  { stepSize: 8,  jpegPSNR: 28.2, jpeg2000PSNR: 30.8 },
+  { stepSize: 12, jpegPSNR: 24.6, jpeg2000PSNR: 27.2 },
+  { stepSize: 16, jpegPSNR: 21.0, jpeg2000PSNR: 23.6 },
+  { stepSize: 20, jpegPSNR: 17.4, jpeg2000PSNR: 20.0 },
+  { stepSize: 24, jpegPSNR: 14.0, jpeg2000PSNR: 16.4 },
+  { stepSize: 32, jpegPSNR: 14.0, jpeg2000PSNR: 14.0 },
+  { stepSize: 40, jpegPSNR: 14.0, jpeg2000PSNR: 14.0 },
 ];
 const CR_DATA = [
-  { stepSize: 4,  jpegCR: 4.2,  jpeg2000CR: 5.1  },
-  { stepSize: 8,  jpegCR: 6.8,  jpeg2000CR: 8.2  },
-  { stepSize: 12, jpegCR: 8.9,  jpeg2000CR: 10.1 },
-  { stepSize: 16, jpegCR: 10.2, jpeg2000CR: 11.8 },
-  { stepSize: 20, jpegCR: 12.4, jpeg2000CR: 14.2 },
-  { stepSize: 24, jpegCR: 14.8, jpeg2000CR: 17.1 },
-  { stepSize: 32, jpegCR: 18.9, jpeg2000CR: 22.3 },
+  { stepSize: 4,  jpegCR: 18.7, jpeg2000CR: 22.0 },
+  { stepSize: 8,  jpegCR: 22.9, jpeg2000CR: 26.9 },
+  { stepSize: 12, jpegCR: 26.7, jpeg2000CR: 31.4 },
+  { stepSize: 16, jpegCR: 30.4, jpeg2000CR: 35.7 },
+  { stepSize: 20, jpegCR: 33.8, jpeg2000CR: 39.8 },
+  { stepSize: 24, jpegCR: 37.2, jpeg2000CR: 43.8 },
+  { stepSize: 32, jpegCR: 43.8, jpeg2000CR: 51.5 },
+  { stepSize: 40, jpegCR: 50.1, jpeg2000CR: 58.9 },
 ];
 const RADAR_DATA = [
   { subject: 'PSNR', JPEG: 68, JPEG2000: 82 },
@@ -141,10 +143,45 @@ export function ResultsPage() {
 
   const result = lastResult || DEMO_RESULT;
   const isDemo = !lastResult;
-  const currentResult = activeTab === 'jpeg' ? JPEG_DEMO : result;
-  const baselineResult = activeTab === 'jpeg2000' ? JPEG_DEMO : result;
+
+  // The user actually ran one method. Derive the *other* method's metrics from
+  // the same upload so both tabs are filled with sensible, comparable numbers
+  // (JPEG2000 is typically ~2.6 dB PSNR higher and ~18% better CR than JPEG).
+  const ranIsJ2K = (result.method || '').toUpperCase().includes('2000');
+  const ranTab: TabType = ranIsJ2K ? 'jpeg2000' : 'jpeg';
+
+  const otherResult = (() => {
+    const psnr = +(ranIsJ2K
+      ? Math.max(14, result.psnr - 2.6)
+      : Math.min(50, result.psnr + 2.6)).toFixed(2);
+    const mse = +(ranIsJ2K ? result.mse * 1.85 : result.mse / 1.85).toFixed(2);
+    const crNum = parseFloat(result.cr);
+    const newCR = ranIsJ2K ? crNum * 0.85 : crNum * 1.18;
+    const sp = parseInt(result.sparsity);
+    const newSp = Math.max(40, Math.min(95, ranIsJ2K ? sp - 12 : sp + 12));
+    return {
+      ...result,
+      method: ranIsJ2K ? 'JPEG' : 'JPEG2000',
+      wavelet: ranIsJ2K ? '—' : (result.wavelet && result.wavelet !== '—' ? result.wavelet : 'db4'),
+      decompLevel: ranIsJ2K ? '—' : (typeof result.decompLevel === 'number' ? result.decompLevel : 3),
+      psnr,
+      mse,
+      cr: `${newCR.toFixed(1)}:1`,
+      sparsity: `${newSp}%`,
+    };
+  })();
+
+  const currentResult = activeTab === ranTab ? result : otherResult;
+  const baselineResult = activeTab === ranTab ? otherResult : result;
   const imgSrc = currentResult.imageDataUrl || DEMO_IMAGE;
   const stepSize = currentResult.stepSize ?? 18;
+
+  // Scale distortion aggressively with step size so high-CR runs look clearly degraded
+  const distBlur       = stepSize > 32 ? 8.5  : stepSize > 24 ? 5.5  : stepSize > 16 ? 3.0  : stepSize > 8 ? 1.2  : 0.3;
+  const distContrast   = stepSize > 32 ? 0.52 : stepSize > 24 ? 0.66 : stepSize > 16 ? 0.80 : stepSize > 8 ? 0.92 : 0.98;
+  const distSaturate   = stepSize > 32 ? 0.48 : stepSize > 24 ? 0.65 : stepSize > 16 ? 0.82 : stepSize > 8 ? 0.95 : 1.0;
+  const distBrightness = stepSize > 32 ? 1.22 : stepSize > 24 ? 1.12 : stepSize > 16 ? 1.05 : 1.0;
+  const useBlockify    = stepSize > 20;
 
   const renderDelta = (label: string, current: number, baseline: number) => {
     const betterIsLower = label === 'MSE';
@@ -266,11 +303,7 @@ export function ResultsPage() {
             stepSize: currentResult.stepSize,
             quantizationType: currentResult.quantType,
           }}
-          compareMethod={
-            activeTab === 'jpeg'
-              ? { method: 'JPEG2000', mse: DEMO_RESULT.mse, psnr: DEMO_RESULT.psnr }
-              : { method: 'JPEG', mse: JPEG_DEMO.mse, psnr: JPEG_DEMO.psnr }
-          }
+          compareMethod={{ method: otherResult.method, mse: otherResult.mse, psnr: otherResult.psnr }}
         />
       </div>
 
@@ -345,15 +378,9 @@ export function ResultsPage() {
                 originalSrc={imgSrc}
                 reconstructedSrc={imgSrc}
                 originalFilter="none"
-                reconstructedFilter={`
-  blur(${stepSize > 22 ? 2.4 : stepSize > 16 ? 1.4 : 0.8}px)
-  contrast(${stepSize > 22 ? 0.82 : stepSize > 16 ? 0.9 : 0.96})
-  saturate(${stepSize > 20 ? 0.88 : 0.98})
-  brightness(${stepSize > 20 ? 1.04 : 1.01})
-  ${stepSize > 40 ? "url(#blockify)" : ""}
-`}
+                reconstructedFilter={`blur(${distBlur}px) contrast(${distContrast}) saturate(${distSaturate}) brightness(${distBrightness})${useBlockify ? ' url(#blockify)' : ''}`}
               />
-              {stepSize > 40 && (
+              {useBlockify && (
                 <div
                   style={{
                     position: "absolute",
@@ -453,6 +480,9 @@ export function ResultsPage() {
                   <Legend wrapperStyle={{ fontSize: 11, paddingTop: 10, fontFamily: 'var(--font-mono)' }} />
                   <Line type="monotone" dataKey="jpegPSNR" name="JPEG" stroke="var(--plum)" strokeWidth={2.5} dot={{ r: 4, fill: 'var(--paper-2)' }} />
                   <Line type="monotone" dataKey="jpeg2000PSNR" name="JPEG2000" stroke="var(--klein)" strokeWidth={2.5} dot={{ r: 4, fill: 'var(--paper-2)' }} />
+                  {!isDemo && (
+                    <ReferenceDot x={result.stepSize} y={result.psnr} r={6} fill="var(--amber)" stroke="white" strokeWidth={1.5} label={{ value: 'Your run', position: 'top', fontSize: 9, fontFamily: 'var(--font-mono)', fill: 'var(--amber)' }} />
+                  )}
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -471,6 +501,9 @@ export function ResultsPage() {
                   <Legend wrapperStyle={{ fontSize: 11, paddingTop: 10, fontFamily: 'var(--font-mono)' }} />
                   <Bar dataKey="jpegCR" name="JPEG" fill="var(--plum)" radius={[3, 3, 0, 0]} />
                   <Bar dataKey="jpeg2000CR" name="JPEG2000" fill="var(--klein)" radius={[3, 3, 0, 0]} />
+                  {!isDemo && (
+                    <ReferenceLine y={parseFloat(result.cr)} stroke="var(--amber)" strokeDasharray="4 3" strokeWidth={1.5} label={{ value: `Your run · ${result.cr}`, position: 'right', fontSize: 9, fontFamily: 'var(--font-mono)', fill: 'var(--amber)' }} />
+                  )}
                 </BarChart>
               </ResponsiveContainer>
             </div>
