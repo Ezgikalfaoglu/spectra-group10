@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { ComparisonSlider } from '../components/ComparisonSlider';
 import { InsightCard } from '../components/InsightCard';
 import { UploadCloud, Image, Sparkles, FileText, CheckCircle2 } from 'lucide-react';
+import { listProfiles } from '../lib/imageTypeProfiles';
 
 type Method = 'jpeg' | 'jpeg2000';
 
@@ -20,13 +21,14 @@ type HistoryEntry = {
   id: string;
   date: string;
   imageName: string;
-  method: Method;
+  method: Method | 'JPEG' | 'JPEG2000';
   stepSize: number;
   mse: number;
   psnr: number;
   cr: string;
   sparsity: string;
   imageDataUrl: string;
+  type?: string;
 };
 
 const SUPPORTED_EXTENSIONS = ['png', 'jpg', 'jpeg', 'bmp', 'gif', 'webp'];
@@ -160,6 +162,7 @@ export function DashboardPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const profiles = listProfiles();
 
   useEffect(() => {
     const saved = window.localStorage.getItem('compressionHistory');
@@ -234,6 +237,27 @@ export function DashboardPage() {
       window.localStorage.setItem('compressionHistory', JSON.stringify(updatedHistory));
       setIsProcessing(false);
     }, 1500);
+  };
+
+  const runPreset = (p: ReturnType<typeof listProfiles>[number]) => {
+    const newResult: HistoryEntry = {
+      id: Date.now().toString(),
+      date: new Date().toISOString(),
+      imageName: `${p.label}_sample.jpg`,
+      method: 'JPEG2000',
+      stepSize: p.stepSize,
+      mse: +(Math.random() * 50 + 20).toFixed(2),
+      psnr: +(40 - p.stepSize / 2).toFixed(2),
+      cr: `${(10 + p.crBonus * 10).toFixed(1)}:1`,
+      sparsity: `${Math.floor(60 + p.crBonus * 20)}%`,
+      imageDataUrl: placeholderImage,
+      type: p.type,
+    };
+
+    const updated = [newResult, ...history].slice(0, 20);
+
+    setHistory(updated);
+    localStorage.setItem('compressionHistory', JSON.stringify(updated));
   };
 
   const currentOriginal = uploadedImage?.dataUrl ?? placeholderImage;
@@ -481,9 +505,9 @@ export function DashboardPage() {
                       style={{ width: '100%', justifyContent: 'center' }}
                       onClick={() => {
                         setUploadedImage({ name: entry.imageName, dataUrl: entry.imageDataUrl });
-                        setMethod(entry.method);
+                        setMethod(entry.method === 'JPEG2000' ? 'jpeg2000' : 'jpeg');
                         setStepSize(entry.stepSize);
-                        setResult({ ...entry, method: entry.method, stepSize: entry.stepSize, imageDataUrl: entry.imageDataUrl });
+                        setResult({ ...entry, method: entry.method === 'JPEG2000' ? 'jpeg2000' : 'jpeg', stepSize: entry.stepSize, imageDataUrl: entry.imageDataUrl });
                       }}
                     >
                       Reload run
@@ -494,6 +518,60 @@ export function DashboardPage() {
             )}
           </section>
         </aside>
+
+      <div style={{ marginTop: 24 }}>
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            letterSpacing: '0.2em',
+            color: 'var(--ink-3)',
+            marginBottom: 12,
+            textTransform: 'uppercase'
+          }}
+        >
+          TYPE BENCHMARK PRESETS
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+          {profiles.map(p => (
+            <div
+              key={p.type}
+              className="sp-card"
+              style={{
+                padding: 14,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+                border: `1px solid ${p.accent}33`
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 11,
+                  color: p.accent,
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase'
+                }}
+              >
+                {p.label}
+              </div>
+
+              <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>
+                Step: {p.stepSize}
+              </div>
+
+              <button
+                onClick={() => runPreset(p)}
+                className="sp-btn sp-btn-klein"
+              >
+                Run preset
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
    </div>
     </div>
   );

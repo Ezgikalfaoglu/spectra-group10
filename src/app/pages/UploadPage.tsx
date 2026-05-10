@@ -42,7 +42,8 @@ interface UploadedFile {
   imageType: string;
 }
 
-const SUPPORTED_EXTS = ['png', 'jpg', 'jpeg', 'bmp', 'tif', 'tiff'];
+/* TIFF intentionally excluded — most browsers cannot render it as <img>. */
+const SUPPORTED_EXTS = ['png', 'jpg', 'jpeg', 'bmp'];
 
 const IMAGE_TYPES = [
   {
@@ -76,36 +77,6 @@ const normalizeFormat = (ext: string) => {
   if (ext === 'jpg' || ext === 'jpeg') return 'JPEG';
   if (ext === 'tif' || ext === 'tiff') return 'TIFF';
   return ext.toUpperCase();
-};
-
-/* ── Tiny built-in demo image ── */
-const DEMO_IMAGE_DATAURL =
-  'data:image/svg+xml;utf8,' +
-  encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
-      <defs>
-        <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="#e8e4d8"/>
-          <stop offset="50%" stop-color="#bdb8a8"/>
-          <stop offset="100%" stop-color="#6b6b6b"/>
-        </linearGradient>
-      </defs>
-      <rect width="256" height="256" fill="url(#g)"/>
-      <circle cx="180" cy="80" r="32" fill="#f5efe1" opacity="0.85"/>
-      <path d="M0,180 L60,140 L110,165 L160,125 L210,150 L256,135 L256,256 L0,256 Z" fill="#3a4250" opacity="0.55"/>
-      <path d="M0,210 L80,175 L140,200 L200,170 L256,185 L256,256 L0,256 Z" fill="#1a1f2a" opacity="0.7"/>
-      <text x="128" y="240" text-anchor="middle" font-family="monospace" font-size="9" fill="#fff" opacity="0.6" letter-spacing="2">DEMO SPECIMEN</text>
-    </svg>`
-  );
-
-const DEMO_FILE: UploadedFile = {
-  name: 'demo_specimen.svg',
-  format: 'SVG',
-  resolution: '256 × 256',
-  colorMode: 'RGB',
-  sizeKB: 2,
-  dataUrl: DEMO_IMAGE_DATAURL,
-  imageType: 'Natural',
 };
 
 /* ── Detect RGB vs Grayscale by sampling pixels via canvas ── */
@@ -162,25 +133,18 @@ export function UploadPage() {
   const [file, setFile] = useState<UploadedFile | null>(null);
   const [isDemo, setIsDemo] = useState(false);
 
-  /* ── Restore saved upload OR fall back to demo mode ── */
+  /* ── Restore saved upload (no demo fallback) ── */
   useEffect(() => {
     const saved = localStorage.getItem('spectra_upload');
-
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved) as UploadedFile;
-        setFile(parsed);
-        setPageState('uploaded');
-        setIsDemo(false);
-        return;
-      } catch {
-        localStorage.removeItem('spectra_upload');
-      }
+    if (!saved) return;
+    try {
+      const parsed = JSON.parse(saved) as UploadedFile;
+      setFile(parsed);
+      setPageState('uploaded');
+      setIsDemo(false);
+    } catch {
+      localStorage.removeItem('spectra_upload');
     }
-
-    setFile(DEMO_FILE);
-    setPageState('uploaded');
-    setIsDemo(true);
   }, []);
 
   const processFile = useCallback(
@@ -456,7 +420,7 @@ export function UploadPage() {
                 ref={fileInputRef}
                 type="file"
                 style={{ display: 'none' }}
-                accept=".png,.jpg,.jpeg,.bmp,.tif,.tiff"
+                accept=".png,.jpg,.jpeg,.bmp"
                 onChange={handleFileSelect}
               />
 
@@ -617,7 +581,7 @@ export function UploadPage() {
                             letterSpacing: '0.05em',
                           }}
                         >
-                          PNG · BMP · TIFF · JPG / JPEG
+                          PNG · BMP · JPG / JPEG
                         </p>
                       </div>
                     )}
@@ -810,8 +774,8 @@ export function UploadPage() {
                 letterSpacing: '0.02em',
               }}
             >
-              All images are processed in <strong>greyscale</strong>. TIFF and
-              BMP provide the cleanest baseline. Max recommended size:{' '}
+              All images are processed in <strong>greyscale</strong>. BMP and
+              PNG provide the cleanest baseline. Max recommended size:{' '}
               <strong>2048×2048 px</strong>.
             </p>
           </div>
@@ -1086,6 +1050,7 @@ export function UploadPage() {
           </div>
         </div>
       </div>
+
     </motion.div>
   );
 }

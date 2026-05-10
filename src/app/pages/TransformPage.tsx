@@ -72,7 +72,7 @@ export function TransformPage() {
   const [settings, setSettings] = useState<TransformSettings>({
     method: 'jpeg2000',
     waveletFilter: 'db4',
-    decompositionLevel: 3,
+    decompositionLevel: 2,
   });
 
   useEffect(() => {
@@ -97,7 +97,7 @@ export function TransformPage() {
     navigate('/quantization');
   };
 
-  const handleBack = () => navigate('/upload');
+  const handleBack = () => navigate('/preprocessing');
 
   const wavelet = WAVELET_INFO[settings.waveletFilter] ?? WAVELET_INFO['db4'];
 
@@ -114,7 +114,7 @@ export function TransformPage() {
       <div style={{ marginBottom: 36 }}>
         <div className="sp-eyebrow" style={{ marginBottom: 10 }}>
           <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--klein)', display: 'inline-block' }} />
-          STEP 02 · TRANSFORM METHOD
+          STEP 03 · TRANSFORM METHOD
         </div>
         <h1 style={{
           fontFamily: 'var(--font-serif)', fontSize: 'clamp(32px, 3vw, 52px)',
@@ -330,7 +330,7 @@ export function TransformPage() {
                 ...(settings.method === 'jpeg2000' ? [
                   { label: 'Wavelet filter', value: WAVELET_INFO[settings.waveletFilter]?.full ?? settings.waveletFilter },
                   { label: 'Decomposition level', value: `Level ${settings.decompositionLevel}` },
-                  { label: 'Subband count', value: `${3 * settings.decompositionLevel + 1} subbands` },
+                  { label: 'Subband count', value: `${Math.pow(4, settings.decompositionLevel)} bands (packet)` },
                 ] : [
                   { label: 'Block size', value: '8 × 8 px' },
                   { label: 'Basis functions', value: '64 cosine' },
@@ -351,7 +351,7 @@ export function TransformPage() {
           {/* Navigation */}
           <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
             <button onClick={handleBack} className="sp-btn sp-btn-ghost" style={{ flex: 1, justifyContent: 'center' }}>
-              ← Upload
+              ← Preprocess
             </button>
             <button onClick={handleNext} className="sp-btn sp-btn-klein" style={{ flex: 2, justifyContent: 'center', gap: 8 }}>
               Next: Quantize
@@ -437,7 +437,7 @@ export function TransformPage() {
             <Info style={{ width: 13, height: 13, color: 'var(--klein)', marginTop: 1, flexShrink: 0 }} />
             <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--ink-2)', lineHeight: 1.6, letterSpacing: '0.02em' }}>
               {settings.method === 'jpeg2000'
-                ? `At Level ${settings.decompositionLevel}, the image decomposes into ${3 * settings.decompositionLevel + 1} subbands. ${settings.decompositionLevel >= 4 ? 'High levels give excellent compression but require more processing time.' : 'This is an optimal level for most natural images.'}`
+                ? `At Level ${settings.decompositionLevel}, the 4-filter bank (LL · HL · LH · HH) is applied recursively to every subband, yielding ${Math.pow(4, settings.decompositionLevel)} bands (wavelet-packet decomposition). ${settings.decompositionLevel >= 3 ? 'High levels give finer frequency resolution at the cost of processing time.' : 'Level 2 (16 bands) balances frequency selectivity and runtime for most natural images.'}`
                 : 'JPEG DCT is the fastest option. Ideal for web delivery where file size is critical. For archival or medical use, prefer JPEG2000.'
               }
             </p>

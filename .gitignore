@@ -2,3 +2,6 @@ node_modules/
 dist/
 .env
 package-lock.json
+
+# Training datasets — not committed (downloaded externally)
+training-data/
