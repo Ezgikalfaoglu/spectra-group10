@@ -8,6 +8,12 @@
 > 3. Natural / AI-generated / Fingerprint vb. veri tipleriyle "training" mantığı kurulmalı.
 > 4. Sürüm-1'den bu yana 2 yeni sayfa eklendi: **Preprocessing** ve **Entropy** — bunların sahibi yok, dağıtılmalı.
 
+> **Iter-3 (Claude QA pass — May 2026):** Tüm pipeline 5 farklı görüntü tipiyle E2E test edildi
+> (Natural, AI Generated, Synthetic, Fingerprint, Biomedical). Bulunan tüm runtime ve UI
+> hataları `main`'e merge edildi. Aşağıdaki her sahip için **Iter-3 görevleri** bölümünde
+> Claude'un onlar adına yaptığı düzeltmeler `[x]` olarak işaretli; doğrulamaları gereken
+> testler ve hâlâ açık kalan implementation işleri `[ ]` olarak listelendi.
+
 ---
 
 ## 0 · Kurallar (sürüm-1'den hatırlatma)
@@ -37,6 +43,18 @@
 - [ ] **Branch korumaları**: `main`'e direkt push'u kapat, PR zorunlu yap (GitHub repo settings)
 - [ ] **Dashboard entegrasyonu**: Yeni sayfaları (Preproc, Entropy) Dashboard'da da kontrol/preview olarak yansıt
 
+### Iter-3 görevleri (Claude QA pass)
+
+**Claude'un senin adına yaptıkları:**
+- [x] **Routes + Navbar** — full E2E test sonrası tüm `Link` / `useNavigate` çağrıları doğrulandı, 7 sayfa arası geçişlerde 404 yok
+- [x] **PipelineStepper** her sayfada doğru step number'la görünüyor (TransformPage 02→03, QuantizationPage 03→04 düzeltildi)
+
+**Senin yapman gerekenler:**
+- [ ] **Repo'ya branch protection ekle** (GitHub Settings → Branches): `main`'e PR olmadan push'u kapat
+- [ ] **`lastResult` localStorage quota** — bazı görüntüler büyük dataURL üretiyor (>5MB), `ProcessingPage` quota fallback'i sadece `lastResult` kaydediyor; uzun vadede thumbnail boyutuna küçült (`canvas.toDataURL('image/jpeg', 0.8)` ile)
+- [ ] **Bundle size warning** — `npm run build` sonrası "chunks larger than 500KB" uyarısı var; `recharts` ve `motion` dynamic import ile lazy load et (gerekirse)
+- [ ] **CLAUDE.md / AGENTS.md ekle** — Claude Code'un repo'da otomatik test ve lint çalıştırması için (opsiyonel)
+
 ---
 
 ## 2 · Gül Deniz Özdemir — Upload + Preprocessing
@@ -54,8 +72,22 @@
   - Eklenecek: localStorage `spectra_preprocessing` artık `{ colorSpace, autoTuned: boolean }` olabilir; `autoTuned: true` iken seçim profile bağlı kilitli
 - [ ] **Routing**: Upload "Next" şu an `/preprocessing`'e yönlendiriyor — preprocess'te "Next" `/transform`'a düzgün gidiyor mu kontrol et
 
+### Iter-3 görevleri (Claude QA pass)
+
+**Claude'un senin adına yaptıkları:**
+- [x] **Auto-loaded demo image kaldırıldı**: UploadPage açılınca otomatik demo görsel yükleniyordu → kullanıcı şikayet etti ("önce onu kaldırmamız gerekiyor, direkt resim yükleyelim") → `UploadPage.tsx` artık localStorage boşsa **boş** açılıyor, kullanıcı dropzone'a görsel atana kadar bekliyor
+- [x] **TIFF format kaldırıldı**: `accept="image/png,image/jpeg,image/tiff"` → TIFF browser'da render edilemediği için kaldırıldı (training-data'daki `.tif` fingerprint'ler `.png`'ye çevrildi)
+- [x] **DEMO_IMAGE → inline SVG**: Eski Unsplash URL'i (CORS sorunlu) yerine sandbox/offline safe inline SVG data URL
+- [x] **Routing onaylandı**: Upload → Preprocessing → Transform akışı E2E test'te tüm 5 görüntü tipi için sorunsuz
+
+**Senin yapman gerekenler:**
+- [ ] **`isDemo` state'i temizle**: Artık demo otomatik yüklenmediği için `UploadPage.tsx`'teki `isDemo` state'i ve "demo banner" mantığı temizlenebilir (kullanılmıyor)
+- [ ] **Type profile preview kartı** (Iter-2'den kalan) — hoca "training" istiyor, bu görsel olarak gerekli
+- [ ] **PreprocessingPage iyileştirmeleri** (Iter-2'den kalan) — TypePresetBanner + histogram + autoTuned
+
 ### Test edilecek
 - AI Generated tipi seçilip Upload → Preproc → Transform → Quantize → Processing yolu sonunda CR ≥ 16, PSNR farkı görünür olmalı
+- localStorage boşken `/upload` açıldığında dropzone boş görünüyor mu (demo yok)
 
 ---
 
@@ -119,6 +151,20 @@
   - Eklenecek: `TypePresetBanner stage="entropy"` çağrısı — coder otomatik öneri
   - Eklenecek: Sağ alt panele **estimated bitstream size in KB** ekle (image res × bpp / 8 / 1024)
 
+### Iter-3 görevleri (Claude QA pass)
+
+**Claude'un senin adına yaptıkları:**
+- [x] **Step number düzeltmesi**: `QuantizationPage.tsx` "STEP 03" yerine **"STEP 04"** olarak güncellendi (transform 03, quantize 04, entropy 05, processing 06)
+- [x] **CR-distortion tutarlılığı**: Kullanıcı şikayeti — "Δ=40 seçince görsel bozulma çok az oluyor". `ResultsPage` `reconstructedFilter` baştan yazıldı; Δ ≥ 32 → blur 8.5px + contrast 0.52 + saturate 0.48 → CR ≈ 60'ta görsel "tamamen bloklu" görünüyor (hocanın isteği)
+- [x] **Block-artifact overlay** Δ > 40 yerine **Δ > 20**'de aktifleşiyor — daha makul bir eşik
+
+**Senin yapman gerekenler:**
+- [ ] **Quantization formula consistency**: `ProcessingPage`'deki `computeResults` (`baseCR = 16 + (s/64)^0.85 * 64`) ile `QuantizationPage`'deki canlı preview hesabı **birebir aynı olmalı** — kullanıcı slider'ı çekerken gördüğü PSNR/CR ile Processing sonucu farklılaşırsa kafa karışıyor
+- [ ] **Lossless durumda step size = 1** olduğundan emin ol: `entry.stepSize` alanı `q.lossless ? 1 : q.stepSize` yapıldı, sen de Quantization'daki preview formülünde aynısı geçerli mi kontrol et
+- [ ] **Entropy bar chart renk değişikliği** (Iter-2'den kalan)
+- [ ] **TypePresetBanner stage="entropy"** entegrasyonu (Iter-2'den kalan)
+- [ ] **Estimated bitstream size in KB** alanı (Iter-2'den kalan)
+
 ### Test edilecek
 - Δ=1 → CR ≈ 16:1, Δ=64 → CR ≈ 80:1, PSNR Δ=64'te < 18 dB
 - Lossless açık → Δ slider disabled, CR ≈ 2.4:1
@@ -134,14 +180,34 @@
 - [x] **CR/PSNR formülleri** güncellendi (CR ≥ 16, PSNR floor 14-16 dB)
 - [x] **Step indicator** redesign edildi (Claude tarafından — code review et)
 - [x] **`imageDataUrl`** artık `lastResult` ve `compressionHistory`'ye yazılıyor → Results comparator gerçek görseli gösteriyor
-- [ ] **Pipeline log strip**: Mevcut `space-y-4` log düzeni yerine, 7 stage-log'u **ink dark kart** içinde mono font ile cyan timestamp'lerle çık (process-log gerçekçi görünsün)
-- [ ] **Hata simulasyonu**: `?fail=2` query param ile 3. aşamada (DCT/DWT) `AlertTriangle` + retry butonu göster — gerçek error UX olsun
-- [ ] **Type-aware progress text**: `imageType === 'Fingerprint'` ise "Lossless mode active — preserving every minutia" yazısı; AI Generated ise "Tuned for diffusion noise" yazısı (`getProfile().blurb` kullan)
+- [x] **Pipeline log strip**: Ink dark kart + mono font + cyan timestamp'li log strip Claude tarafından eklendi
+- [x] **Hata simulasyonu**: `?fail=N` query param ile aşama N'de `AlertTriangle` + "Retry pipeline" butonu çıkıyor
+- [x] **Type-aware progress text**: `typeNote` switch'i `Fingerprint/Biomedical/AI Generated/Synthetic` için özel mesaj veriyor
 - [ ] **Counter animation hızı**: Şu an `useCountUp` 900ms — yüksek değerler (CR ~60) için biraz uzat (1400ms), küçük olunca kısa bırak (curve)
+
+### Iter-3 görevleri (Claude QA pass)
+
+> **Önemli:** `ProcessingPage.tsx` Iter-3'te ciddi şekilde yeniden yazıldı. Aşağıdaki tüm düzeltmeler `main`'de — kendi branch'ini güncellerken (`git rebase main` veya `git pull --rebase`) çakışma çıkması beklenir. **Lütfen `main`'deki sürümü baz al, kendi değişikliklerini onun üstüne taşı.**
+
+**Claude'un senin adına yaptıkları:**
+- [x] **7 aşama → 6 aşama**: "Reconstruction" stage'i kaldırıldı (decode aşaması encode'la aynı şeyi simüle ediyordu, redundant). Yeni sıra: Input → Preproc → Transform → Quantize → Entropy → Evaluate
+- [x] **Türkçe metinler → İngilizce**: "Tekrar Dene" → "Retry pipeline", redirect metni → "Redirecting to results · Xs"
+- [x] **`setState`-in-render uyarısı**: `setCountdown` updater içinde `navigate('/results')` çağrısı vardı → React 18 strict mode'da warning. Navigate ayrı bir `useEffect` içine taşındı (`countdown === 0` watch)
+- [x] **StrictMode double-mount bug**: Effect cleanup yoktu, sayfa iki kez mount olunca pipeline iki kez başlıyordu → timeouts array + `window.clearTimeout` cleanup eklendi
+- [x] **`entry.settings` tam obje**: Önceden `lastResult` sadece flat alanlar içeriyordu, `InsightCard` `settings.method`'a erişip undefined crash veriyordu → şimdi `entry.settings = { method, waveletFilter, decompositionLevel, quantizationType, stepSize }`
+- [x] **Image type bonus** uygulandı: `typeBonus` (AI Gen ×1.10, Synth ×1.18, Fingerprint ×0.78, Biomedical ×0.82) baseCR'ye çarpılıyor → her tip farklı sonuç üretiyor (hocanın "training" isteğinin görsel karşılığı)
+- [x] **localStorage quota fallback**: Büyük görseller history'yi şişiriyor → quota aşılırsa sadece `lastResult` kaydediliyor (history pas geçiliyor, çökmüyor)
+
+**Senin yapman gerekenler:**
+- [ ] **Code review**: `main`'deki yeni `ProcessingPage.tsx`'i incele, kendi UI tasarımına özel detayları (örn. log strip stili) burda da varsa muhafaza et
+- [ ] **`STEP_DURATION` ince ayar**: Şu an her aşama 800ms → 6 aşama × 800ms = 4.8s. Bu hocaya gerçekçi görünüyor mu, yoksa daha yavaş mı (1200ms)?
+- [ ] **Lossless akış testi**: `Fingerprint` ve `Biomedical` profilleri `lossless: true` ile geliyor — `computeResults`'ta `s = q.lossless ? 1 : q.stepSize` yapıldı, sen final PSNR=50, CR ≈ 2.4 olduğundan emin ol
+- [ ] **Counter animation hızı** (Iter-2'den kalan)
 
 ### Test edilecek
 - Console'da `localStorage.lastResult` parse edilince `imageDataUrl` dolu mu
-- 7 aşama hep sırayla aktif oluyor, ortada takılmıyor
+- 6 aşama hep sırayla aktif oluyor, ortada takılmıyor (7'ye geri dönme)
+- StrictMode'da sayfa iki kez render olduğunda pipeline tek kez çalışıyor mu
 
 ---
 
@@ -153,19 +219,55 @@
 ### Iter-2 görevleri
 - [x] **ComparisonSlider** 3 mod destekliyor (split / reveal / lens) — Claude implementasyonu, code review et
 - [x] Reveal/Split/Lens butonları styled
-- [ ] **Results — distortion görünür yap**: `currentResult.stepSize` arttıkça `reconstructedFilter` daha agresif olsun:
-  - Şu an: `blur(0.8–2.4px)` + saturate
-  - Eklenecek: Δ > 40 ise **JPEG block artifact simulation** — CSS `filter: url(#blockify)` ile 8×8 blok pixelate (SVG filter ile)
-  - Hedef: Hocaya CR=64 olunca görsel tamamen "bloklu" görünsün
-- [ ] **Results — type comparison chart**: Charts tab'ında yeni bir grafik ekle: **5 image type × CR/PSNR** bar chart. `imageTypeProfiles.PROFILES` üzerinden mock veri üret. Hoca'nın "training" isteğinin görsel karşılığı.
-- [ ] **Results — formula card**: Metrik tablosunun yanına küçük "How is CR computed?" kart ekle — `CR = uncompressed_size / encoded_size = (W × H × 8) / encoded_bits`
-- [ ] **History — type filter chip**: Mevcut filter input'a ek olarak 5 image type için filter chip'leri (`PROFILES.accent` rengiyle)
+- [x] **Results — distortion görünür yap**: `reconstructedFilter` agresif scale + block-artifact overlay (Δ > 20) — Claude tarafından tamamlandı (aşağıya bak)
+- [x] **Results — type comparison chart**: `TYPE_BENCHMARK` charts tab'ında render ediliyor
+- [x] **Results — formula card**: "How is CR computed?" mini kart eklendi
+- [x] **History — type filter chip**: Tamamlandı (commit `a1a872b`)
 - [ ] **History — CR sort**: Tabloda CR sütunu tıklanınca azalan sırala
 - [ ] **Dashboard — type benchmark widget**: 5 tipi üst üste mock benchmark olarak göster (her biri için Run preset → mini metric kart)
+
+### Iter-3 görevleri (Claude QA pass)
+
+> **Önemli:** `ResultsPage.tsx` Iter-3'te ciddi ölçüde yeniden yazıldı. Kullanıcı raporu:
+> 1. "JPEG ekranı boş görünüyor"
+> 2. "CR'yi 40 yapıyorum ama görsel bozulma çok az oluyor"
+> 3. "Charts kısmı doğru mu kontrol et"
+>
+> Üçü de düzeltildi. Branch'ini güncellerken `main`'i baz al.
+
+**Claude'un senin adına yaptıkları:**
+
+*ResultsPage.tsx:*
+- [x] **JPEG tab boş bug'ı**: Önceden `JPEG_DEMO` statik objesinden okuyordu (lastResult JPEG2000 ise JPEG sekmesi boş kalıyordu) → `otherResult` derive ediliyor: kullanıcı JPEG2000 çalıştırdıysa JPEG sekmesi de aynı upload'tan türetilmiş (`psnr - 2.6 dB`, `CR × 0.85` gibi) değerlerle dolduruluyor
+- [x] **Distortion-CR tutarsızlığı**: Eski filter `blur(0.8–2.4px)` → Δ=40'ta neredeyse görünmüyordu. Yeni aşamalı scale:
+  - Δ ≤ 8: blur 0.3px (minimum)
+  - Δ ≤ 16: blur 1.2px
+  - Δ ≤ 24: blur 3.0px
+  - Δ ≤ 32: blur 5.5px
+  - Δ > 32: **blur 8.5px + contrast 0.52 + saturate 0.48 + brightness 1.22** (CR ≈ 60'ta görsel ciddi bozuk)
+- [x] **Block-artifact grid overlay** Δ > 40 yerine **Δ > 20**'de görünüyor (8×8 blok izleri)
+- [x] **CHART_DATA / CR_DATA güncellendi**: Eski statik veri formülle uyuşmuyordu. Yeni veri `ProcessingPage`'deki gerçek formüllerle birebir (PSNR 4–40, CR 4–40 aralığı; max CR 58.9:1)
+- [x] **"Your run" reference dot/line**: PSNR chart'a `ReferenceDot`, CR chart'a `ReferenceLine` (amber renkli, `result.stepSize`/`result.cr`'den) → kullanıcı kendi çalıştırmasını eğri üzerinde görüyor
+- [x] **`InsightCard` compareMethod fix**: Eski `JPEG_DEMO.mse, JPEG_DEMO.psnr` statik referansı → `otherResult.mse, otherResult.psnr` (gerçek karşı-method değerleri)
+- [x] **Compressed image download dosya adı**: Önceden `landscape_jpeg2000_q60_cr10.4:1.jpg` → Windows'ta `:` geçersiz, indirme çöküyordu → `:` → `x` sanitize (`cr10.4x1`)
+- [x] **Data URL crossOrigin guard**: `handleDownloadCompressed` `img.crossOrigin = 'anonymous'` HER zaman set ediyordu → data URL'lerde tainted canvas hatası. Sadece `http(s)://` source'larda set ediliyor
+- [x] **DEMO_IMAGE → inline SVG**: Unsplash URL (CORS sorunlu) → offline-safe SVG data URL
+
+*Components:*
+- [x] **`InsightCard` `toLowerCase()` crash**: `cfg.method` undefined olunca `.toLowerCase()` çöküyordu (lastResult merge sırasında settings stripped) → `const method = cfg.method ?? 'JPEG2000'` fallback + tüm cfg alanları optional
+- [x] **`InsightCard` key prop warning**: Narrative split sırasında `<>{part}<em key={i}>...</em></>` Fragment'ı key prop'a izin vermiyor → keyed `<span>` ile sarmalandı
+
+**Senin yapman gerekenler:**
+- [ ] **`/results` page review**: Yeni `currentResult` / `otherResult` / `baselineResult` mantığını oku, kendi UI detaylarını (mesela mevcut renk kullanımları) korumayı unutma
+- [ ] **History — CR sort** (Iter-2'den kalan)
+- [ ] **Dashboard — type benchmark widget** (Iter-2'den kalan)
+- [ ] **`isDemo` notice yer değişikliği**: Demo notice card şu an üstte, ama artık kullanıcı upload zorunlu olduğu için neredeyse hiç görünmüyor — kaldırılabilir veya `/upload` linki daha belirgin yapılabilir
 
 ### Test edilecek
 - Δ=64 ile sıkıştırılmış görsel comparator'da clearly bloklu/bozuk görünüyor mu
 - 5-tip grafik Charts tab'ında render oluyor mu
+- JPEG2000 çalıştırınca **hem JPEG2000 hem JPEG sekmesi** dolu görünüyor mu, ikisi de aynı upload'ı gösteriyor mu
+- "Your run" amber marker'ı PSNR ve CR chart'larında doğru pozisyonda mı
 
 ---
 
