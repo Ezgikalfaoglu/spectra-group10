@@ -69,10 +69,35 @@
 - [x] **DCT formülü** kart üstünde gösteriliyor
 - [ ] **DCT panel — interaktif zoom**: Bir hücreye hover → tooltip ile o hücrenin **u, v, F(u,v)** ve **karşılık gelen cosine basis function** SVG previewi gösterilsin (DCTBlockPanel'i genişlet — `<title>` yerine custom tooltip)
 - [ ] **DCT panel — quantization preview butonu**: Sayfa üstünde küçük bir "Preview after Δ=8 quantization" toggle → DCT matrisi `round(F(u,v) / Δ) * Δ` ile yeniden hesaplanmış görünsün, böylece öğrenci hocaya quantization'ın görsel etkisini gösterebilir
-- [ ] **DWT görselleştirmesi**: `DWTSubbandsViz` içinde mevcut alt-bant kutucuklarına da **örnek katsayı değerleri** ekle (LL: 234.5, LH: 12.3, HH: -1.2 gibi). Şu an kutucuklar boş.
+- [x] **DWT görselleştirmesi**: `DWTSubbandsViz` içinde mevcut alt-bant kutucuklarına da **örnek katsayı değerleri** ekle (LL: 234.5, LH: 12.3, HH: -1.2 gibi) — UI tarafı tamamlandı (4×4 = 16 bant, packet decomposition)
 - [ ] **TypePresetBanner** zaten Transform'a entegre edildi — bunu `feature/transform-fatmanur` branch'ine merge edildiğinde kontrol et
 
-### Test edilecek
+### Iter-3 görevleri (Hoca geri bildirimi: "4 filtreden geçirip 16 bant elde et")
+
+> Hoca demiş ki: "DWT sadece 4 bant gösteriyor — ben 4 filtreden geçirip **16 bant** istiyorum."
+> UI tarafı Claude tarafından `feature/dwt-packet-16bands` mantığıyla `main`'e merge edildi:
+> - `DWTSubbandsViz` artık **wavelet packet decomposition** yapıyor (sadece LL değil, **her 4 alt-bant** yeniden 4 filtreden geçiriliyor).
+> - Level 1 → 4 bant, **Level 2 → 16 bant**, Level 3 → 64 bant.
+> - Her hücrede filter zinciri (`LLLL`, `LLHL`, …) ve gerçekçi katsayı değeri (`234.5`, `−6.4`, `0.02`…) görünüyor.
+> - `TransformPage` default level **3 → 2** değiştirildi → kullanıcı sayfayı açtığı an 16 bantlı görüntü çıkıyor.
+> - "Subband count" satırı ve performance hint metni `4^level` formülüne uyarlandı.
+
+**Senin tamamlaman gereken işler (implementation tarafı — UI artık 16 bant gösteriyor, alttaki hesap da uymalı):**
+- [ ] **Wavelet-packet transform fonksiyonu**: `TransformPage` veya `lib/dwt.ts` (yeni) içinde gerçek 2D wavelet-packet transform fonksiyonu olmalı:
+  - Girdi: 2D image array + filter (`haar`/`db2`/`db4`) + level
+  - Çıktı: `level^2` × `level^2` koefisyen grid'i (4^level alt-bant)
+  - Mevcut kod (eğer pyramid DWT yapıyorsa) → packet'e çevir: her seviyede sadece LL değil **4 bandın hepsini** yeniden böl
+- [ ] **Coefficient hesaplama**: `DWTSubbandsViz` şu an mock değer (`FILTER_ENERGY`) kullanıyor. Gerçek transform sonucu localStorage'a yazılıp viz'e prop olarak geçirilebilir → `<DWTSubbandsViz coefficients={...} />` API'sı ekle
+- [ ] **`computeResults`'da kullan**: `ProcessingPage`'deki sparsity/CR formülünde 16-bant katsayı dağılımını kullan (LL-heavy → daha az sparsity, HH-heavy → daha yüksek sparsity)
+- [ ] **PreprocessingPage'deki "Subband count" benzeri metinleri kontrol et** — başka yerlerde `3*level+1` formülü kullanılıyor mu?
+- [ ] **`grep -rn "3 \* .*decompositionLevel\|3\*level" src/`** ile eski formülü ara, hepsini `Math.pow(4, level)` yap
+
+**Test:**
+- `npx vite build` hatasız geçmeli
+- Transform sayfasında J2K seçili + Level 2 → 16 hücre görünmeli, her hücrede sayı + etiket olmalı
+- Level değiştirildiğinde (1/2/3) bant sayısı 4/16/64 olarak değişmeli
+
+### Test edilecek (eski)
 - 8×8 DCT panelde DC hücresi (−415) ayrı vurgulu, sağ alt 0 cluster görünüyor mu
 - Tip profili "Apply preset" butonu method/wavelet/level'i doğru güncelliyor mu
 
