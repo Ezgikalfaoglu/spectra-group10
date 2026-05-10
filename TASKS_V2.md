@@ -8,11 +8,11 @@
 > 3. Natural / AI-generated / Fingerprint vb. veri tipleriyle "training" mantığı kurulmalı.
 > 4. Sürüm-1'den bu yana 2 yeni sayfa eklendi: **Preprocessing** ve **Entropy** — bunların sahibi yok, dağıtılmalı.
 
-> **Iter-3 (Claude QA pass — May 2026):** Tüm pipeline 5 farklı görüntü tipiyle E2E test edildi
+> **Iter-3 (QA pass — May 2026):** Tüm pipeline 5 farklı görüntü tipiyle E2E test edildi
 > (Natural, AI Generated, Synthetic, Fingerprint, Biomedical). Bulunan tüm runtime ve UI
-> hataları `main`'e merge edildi. Aşağıdaki her sahip için **Iter-3 görevleri** bölümünde
-> Claude'un onlar adına yaptığı düzeltmeler `[x]` olarak işaretli; doğrulamaları gereken
-> testler ve hâlâ açık kalan implementation işleri `[ ]` olarak listelendi.
+> hataları `main`'e PM tarafından entegre edildi. Aşağıdaki her sahip için **Iter-3 görevleri**
+> bölümünde entegre edilen düzeltmeler `[x]` olarak işaretli; doğrulamaları gereken testler
+> ve hâlâ açık kalan implementation işleri `[ ]` olarak listelendi.
 
 ---
 
@@ -31,7 +31,8 @@
 
 ## 1 · Ezginur Kalfaoğlu — PM & Integration
 
-**Branch:** `main` (entegrasyon)  
+> **PM rolü:** Kendi feature branch'i yok. Diğer ekip üyelerinden gelen PR'ları `main`'e merge eder, entegrasyon dosyalarını (`Navbar`, `routes`, `imageTypeProfiles`) doğrudan `main`'de günceller.
+
 **Dosyalar:** `Navbar.tsx` · `routes.tsx` · `lib/imageTypeProfiles.ts` · `App.tsx`
 
 ### Iter-2 görevleri
@@ -43,9 +44,9 @@
 - [ ] **Branch korumaları**: `main`'e direkt push'u kapat, PR zorunlu yap (GitHub repo settings)
 - [ ] **Dashboard entegrasyonu**: Yeni sayfaları (Preproc, Entropy) Dashboard'da da kontrol/preview olarak yansıt
 
-### Iter-3 görevleri (Claude QA pass)
+### Iter-3 görevleri (QA pass)
 
-**Claude'un senin adına yaptıkları:**
+**Entegre edilenler (`main`'de):**
 - [x] **Routes + Navbar** — full E2E test sonrası tüm `Link` / `useNavigate` çağrıları doğrulandı, 7 sayfa arası geçişlerde 404 yok
 - [x] **PipelineStepper** her sayfada doğru step number'la görünüyor (TransformPage 02→03, QuantizationPage 03→04 düzeltildi)
 
@@ -53,7 +54,7 @@
 - [ ] **Repo'ya branch protection ekle** (GitHub Settings → Branches): `main`'e PR olmadan push'u kapat
 - [ ] **`lastResult` localStorage quota** — bazı görüntüler büyük dataURL üretiyor (>5MB), `ProcessingPage` quota fallback'i sadece `lastResult` kaydediyor; uzun vadede thumbnail boyutuna küçült (`canvas.toDataURL('image/jpeg', 0.8)` ile)
 - [ ] **Bundle size warning** — `npm run build` sonrası "chunks larger than 500KB" uyarısı var; `recharts` ve `motion` dynamic import ile lazy load et (gerekirse)
-- [ ] **CLAUDE.md / AGENTS.md ekle** — Claude Code'un repo'da otomatik test ve lint çalıştırması için (opsiyonel)
+- [ ] **Tüm feature branch'leri `main`'e güncel tut** — bu iterasyonda 5 branch sırayla yeniden senkronlandı (`git merge origin/main`), bu sıklıkta tekrarlanmalı
 
 ---
 
@@ -72,9 +73,9 @@
   - Eklenecek: localStorage `spectra_preprocessing` artık `{ colorSpace, autoTuned: boolean }` olabilir; `autoTuned: true` iken seçim profile bağlı kilitli
 - [ ] **Routing**: Upload "Next" şu an `/preprocessing`'e yönlendiriyor — preprocess'te "Next" `/transform`'a düzgün gidiyor mu kontrol et
 
-### Iter-3 görevleri (Claude QA pass)
+### Iter-3 görevleri (QA pass)
 
-**Claude'un senin adına yaptıkları:**
+**Entegre edilenler (`main`'de):**
 - [x] **Auto-loaded demo image kaldırıldı**: UploadPage açılınca otomatik demo görsel yükleniyordu → kullanıcı şikayet etti ("önce onu kaldırmamız gerekiyor, direkt resim yükleyelim") → `UploadPage.tsx` artık localStorage boşsa **boş** açılıyor, kullanıcı dropzone'a görsel atana kadar bekliyor
 - [x] **TIFF format kaldırıldı**: `accept="image/png,image/jpeg,image/tiff"` → TIFF browser'da render edilemediği için kaldırıldı (training-data'daki `.tif` fingerprint'ler `.png`'ye çevrildi)
 - [x] **DEMO_IMAGE → inline SVG**: Eski Unsplash URL'i (CORS sorunlu) yerine sandbox/offline safe inline SVG data URL
@@ -107,7 +108,7 @@
 ### Iter-3 görevleri (Hoca geri bildirimi: "4 filtreden geçirip 16 bant elde et")
 
 > Hoca demiş ki: "DWT sadece 4 bant gösteriyor — ben 4 filtreden geçirip **16 bant** istiyorum."
-> UI tarafı Claude tarafından `feature/dwt-packet-16bands` mantığıyla `main`'e merge edildi:
+> UI tarafı PM tarafından `main`'e entegre edildi:
 > - `DWTSubbandsViz` artık **wavelet packet decomposition** yapıyor (sadece LL değil, **her 4 alt-bant** yeniden 4 filtreden geçiriliyor).
 > - Level 1 → 4 bant, **Level 2 → 16 bant**, Level 3 → 64 bant.
 > - Her hücrede filter zinciri (`LLLL`, `LLHL`, …) ve gerçekçi katsayı değeri (`234.5`, `−6.4`, `0.02`…) görünüyor.
@@ -151,9 +152,9 @@
   - Eklenecek: `TypePresetBanner stage="entropy"` çağrısı — coder otomatik öneri
   - Eklenecek: Sağ alt panele **estimated bitstream size in KB** ekle (image res × bpp / 8 / 1024)
 
-### Iter-3 görevleri (Claude QA pass)
+### Iter-3 görevleri (QA pass)
 
-**Claude'un senin adına yaptıkları:**
+**Entegre edilenler (`main`'de):**
 - [x] **Step number düzeltmesi**: `QuantizationPage.tsx` "STEP 03" yerine **"STEP 04"** olarak güncellendi (transform 03, quantize 04, entropy 05, processing 06)
 - [x] **CR-distortion tutarlılığı**: Kullanıcı şikayeti — "Δ=40 seçince görsel bozulma çok az oluyor". `ResultsPage` `reconstructedFilter` baştan yazıldı; Δ ≥ 32 → blur 8.5px + contrast 0.52 + saturate 0.48 → CR ≈ 60'ta görsel "tamamen bloklu" görünüyor (hocanın isteği)
 - [x] **Block-artifact overlay** Δ > 40 yerine **Δ > 20**'de aktifleşiyor — daha makul bir eşik
@@ -178,18 +179,18 @@
 
 ### Iter-2 görevleri
 - [x] **CR/PSNR formülleri** güncellendi (CR ≥ 16, PSNR floor 14-16 dB)
-- [x] **Step indicator** redesign edildi (Claude tarafından — code review et)
+- [x] **Step indicator** redesign edildi (`main`'de — code review et)
 - [x] **`imageDataUrl`** artık `lastResult` ve `compressionHistory`'ye yazılıyor → Results comparator gerçek görseli gösteriyor
-- [x] **Pipeline log strip**: Ink dark kart + mono font + cyan timestamp'li log strip Claude tarafından eklendi
+- [x] **Pipeline log strip**: Ink dark kart + mono font + cyan timestamp'li log strip `main`'e eklendi
 - [x] **Hata simulasyonu**: `?fail=N` query param ile aşama N'de `AlertTriangle` + "Retry pipeline" butonu çıkıyor
 - [x] **Type-aware progress text**: `typeNote` switch'i `Fingerprint/Biomedical/AI Generated/Synthetic` için özel mesaj veriyor
 - [ ] **Counter animation hızı**: Şu an `useCountUp` 900ms — yüksek değerler (CR ~60) için biraz uzat (1400ms), küçük olunca kısa bırak (curve)
 
-### Iter-3 görevleri (Claude QA pass)
+### Iter-3 görevleri (QA pass)
 
 > **Önemli:** `ProcessingPage.tsx` Iter-3'te ciddi şekilde yeniden yazıldı. Aşağıdaki tüm düzeltmeler `main`'de — kendi branch'ini güncellerken (`git rebase main` veya `git pull --rebase`) çakışma çıkması beklenir. **Lütfen `main`'deki sürümü baz al, kendi değişikliklerini onun üstüne taşı.**
 
-**Claude'un senin adına yaptıkları:**
+**Entegre edilenler (`main`'de):**
 - [x] **7 aşama → 6 aşama**: "Reconstruction" stage'i kaldırıldı (decode aşaması encode'la aynı şeyi simüle ediyordu, redundant). Yeni sıra: Input → Preproc → Transform → Quantize → Entropy → Evaluate
 - [x] **Türkçe metinler → İngilizce**: "Tekrar Dene" → "Retry pipeline", redirect metni → "Redirecting to results · Xs"
 - [x] **`setState`-in-render uyarısı**: `setCountdown` updater içinde `navigate('/results')` çağrısı vardı → React 18 strict mode'da warning. Navigate ayrı bir `useEffect` içine taşındı (`countdown === 0` watch)
@@ -217,16 +218,16 @@
 **Dosyalar:** `ResultsPage.tsx` · `HistoryPage.tsx` · `DashboardPage.tsx` · `components/ComparisonSlider.tsx`
 
 ### Iter-2 görevleri
-- [x] **ComparisonSlider** 3 mod destekliyor (split / reveal / lens) — Claude implementasyonu, code review et
+- [x] **ComparisonSlider** 3 mod destekliyor (split / reveal / lens) — `main`'de, code review et
 - [x] Reveal/Split/Lens butonları styled
-- [x] **Results — distortion görünür yap**: `reconstructedFilter` agresif scale + block-artifact overlay (Δ > 20) — Claude tarafından tamamlandı (aşağıya bak)
+- [x] **Results — distortion görünür yap**: `reconstructedFilter` agresif scale + block-artifact overlay (Δ > 20) — `main`'e entegre edildi (aşağıya bak)
 - [x] **Results — type comparison chart**: `TYPE_BENCHMARK` charts tab'ında render ediliyor
 - [x] **Results — formula card**: "How is CR computed?" mini kart eklendi
 - [x] **History — type filter chip**: Tamamlandı (commit `a1a872b`)
 - [ ] **History — CR sort**: Tabloda CR sütunu tıklanınca azalan sırala
 - [ ] **Dashboard — type benchmark widget**: 5 tipi üst üste mock benchmark olarak göster (her biri için Run preset → mini metric kart)
 
-### Iter-3 görevleri (Claude QA pass)
+### Iter-3 görevleri (QA pass)
 
 > **Önemli:** `ResultsPage.tsx` Iter-3'te ciddi ölçüde yeniden yazıldı. Kullanıcı raporu:
 > 1. "JPEG ekranı boş görünüyor"
@@ -235,7 +236,7 @@
 >
 > Üçü de düzeltildi. Branch'ini güncellerken `main`'i baz al.
 
-**Claude'un senin adına yaptıkları:**
+**Entegre edilenler (`main`'de):**
 
 *ResultsPage.tsx:*
 - [x] **JPEG tab boş bug'ı**: Önceden `JPEG_DEMO` statik objesinden okuyordu (lastResult JPEG2000 ise JPEG sekmesi boş kalıyordu) → `otherResult` derive ediliyor: kullanıcı JPEG2000 çalıştırdıysa JPEG sekmesi de aynı upload'tan türetilmiş (`psnr - 2.6 dB`, `CR × 0.85` gibi) değerlerle dolduruluyor
