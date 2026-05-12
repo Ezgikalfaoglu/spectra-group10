@@ -37,18 +37,26 @@ interface StoredTransform {
   decompositionLevel: number;
 }
 
+function typeBonusFor(imageType: string) {
+  if (imageType === 'AI Generated') return 1.10;
+  if (imageType === 'Synthetic') return 1.18;
+  if (imageType === 'Fingerprint') return 0.78;
+  if (imageType === 'Biomedical') return 0.82;
+  return 1.00;
+}
+
 const DEFAULT_TRANSFORM: StoredTransform = {
   method: 'jpeg2000',
   waveletFilter: 'db4',
   decompositionLevel: 3,
 };
 
-/* Task-specific mock estimates — CR floor is 16:1, PSNR drops hard at large Δ */
-function estimateMetrics(stepSize: number, lossless: boolean) {
+/* Preview math aligned with processing formulas; lossless keeps 2.4:1 UX target. */
+function estimateMetrics(stepSize: number, lossless: boolean, typeBonus: number) {
   if (lossless) return { psnr: '∞', cr: '2.4:1' };
-  const estPSNR = Math.max(16, 40 - stepSize * 0.45).toFixed(1);
+  const estPSNR = Math.max(14, 38 - stepSize * 0.9).toFixed(1);
   const baseCR = 16 + Math.pow(stepSize / 64, 0.85) * 64;
-  const estCR = `${baseCR.toFixed(1)}:1`;
+  const estCR = `${Math.max(16, baseCR * typeBonus).toFixed(1)}:1`;
   return {
     psnr: estPSNR,
     cr: estCR,
@@ -58,6 +66,7 @@ function estimateMetrics(stepSize: number, lossless: boolean) {
 export function QuantizationPage() {
   const navigate = useNavigate();
   const [transform, setTransform] = useState<StoredTransform | null>(null);
+  const [uploadType, setUploadType] = useState('Natural');
   const [isHydrated, setIsHydrated] = useState(false);
   const [isLosslessForced, setIsLosslessForced] = useState(false);
   const [settings, setSettings] = useState<QuantizationSettings>({
@@ -73,6 +82,7 @@ export function QuantizationPage() {
     if (upload) {
       try {
         const u = JSON.parse(upload);
+        setUploadType(String(u.imageType || 'Natural'));
         const forced = ['fingerprint', 'biomedical'].includes(String(u.imageType || '').toLowerCase());
         forcedLossless = forced;
         setIsLosslessForced(forced);
@@ -108,11 +118,16 @@ export function QuantizationPage() {
     setSettings(s => ({ ...s, [key]: value }));
 
   const handleNext = () => {
-    localStorage.setItem('spectra_quantization', JSON.stringify(settings));
+    const payload = {
+      ...settings,
+      stepSize: settings.lossless ? 1 : settings.stepSize,
+    };
+    localStorage.setItem('spectra_quantization', JSON.stringify(payload));
     navigate('/entropy');
   };
 
-  const metrics = estimateMetrics(settings.stepSize, settings.lossless);
+  const effectiveStep = settings.lossless ? 1 : settings.stepSize;
+  const metrics = estimateMetrics(effectiveStep, settings.lossless, typeBonusFor(uploadType));
   const psnrValue = settings.lossless ? Infinity : Number(metrics.psnr);
   const psnrColor = psnrValue > 35
     ? 'var(--leaf)'
@@ -133,7 +148,7 @@ export function QuantizationPage() {
   const controlsDisabled = settings.lossless;
   const qualityScaleLeft = settings.lossless
     ? 4
-    : Math.min(95, (settings.stepSize / 64) * 100);
+    : Math.min(95, (effectiveStep / 64) * 100);
 
   return (
     <motion.div
@@ -418,6 +433,18 @@ export function QuantizationPage() {
                   <span>→ Compression</span>
                 </div>
                 <div style={{ height: 8, borderRadius: 4, background: 'linear-gradient(90deg, var(--leaf), var(--klein), var(--amber), #d4574c)', position: 'relative', marginBottom: 6 }}>
+                  <div style={{
+                    position: 'absolute',
+                    left: `${qualityScaleLeft}%`,
+                    top: -24,
+                    transform: 'translateX(-50%)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    letterSpacing: '0.08em',
+                    color: settings.lossless ? 'var(--leaf)' : 'var(--ink-3)',
+                  }}>
+                    {settings.lossless ? 'Δ1' : `Δ${effectiveStep}`}
+                  </div>
                   <motion.div
                     animate={{
                       left: `${qualityScaleLeft}%`,
@@ -457,7 +484,7 @@ export function QuantizationPage() {
                 QUANTIZATION EFFECT · LIVE
               </span>
             </div>
-            <DCTBlockPanel delta={settings.stepSize} />
+            <DCTBlockPanel delta={effectiveStep} />
           </div>
 
           {/* Pipeline summary */}
