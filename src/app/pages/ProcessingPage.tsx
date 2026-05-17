@@ -6,6 +6,7 @@ import {
   Activity, CheckCircle2, AlertTriangle, Terminal,
 } from 'lucide-react';
 import { PipelineStepper } from '../components/PipelineStepper';
+import type { SubbandStat } from '../lib/dwt';
 
 const query = new URLSearchParams(window.location.search);
 const failStep = query.get('fail') ? Number(query.get('fail')) : null;
@@ -16,6 +17,7 @@ interface UploadData {
 }
 interface TransformSettings {
   method: 'jpeg' | 'jpeg2000'; waveletFilter: string; decompositionLevel: number;
+  subbandStats?: SubbandStat[];
 }
 interface QuantizationSettings {
   quantizationType: 'uniform' | 'scalar'; stepSize: number; lossless: boolean;
@@ -40,8 +42,33 @@ function computeResults(t: TransformSettings, q: QuantizationSettings, imageType
 
   let psnr = 38 - s * 0.9;
   let mse = (s * s) / 180;
-  let baseCR = 16 + Math.pow(s / 64, 0.85) * 64;
-  let sp = 50 + s * 1.1;
+  const baseCR = 16 + Math.pow(s / 64, 0.85) * 64;
+
+  // Sparsity from real subband distribution when J2K stats are present.
+  // After uniform quantization, |c| < step/2 → zero. Per-subband zero-fraction
+  // approximated from meanAbs, then area-weighted across all subbands.
+  let sparsity: number;
+  let sparsityBoost = 1.0;
+
+  if (t.method === 'jpeg2000' && t.subbandStats && t.subbandStats.length) {
+    if (q.lossless) {
+      sparsity = 0;
+    } else {
+      let zeroSum = 0, weightSum = 0;
+      for (const b of t.subbandStats) {
+        const w = b.size * b.size;
+        const denom = Math.max(0.001, b.meanAbs * 2);
+        const zf = Math.max(0, Math.min(0.98, 1 - denom / s));
+        zeroSum += zf * w;
+        weightSum += w;
+      }
+      sparsity = weightSum ? (zeroSum / weightSum) * 100 : 50 + s * 1.1;
+    }
+    // CR boost from sparsity — more zeros → better entropy coding gain.
+    sparsityBoost = 1 + (sparsity - 50) / 100;
+  } else {
+    sparsity = q.lossless ? 0 : 50 + s * 1.1;
+  }
 
   // Image type bonus
   const typeBonus =
@@ -51,7 +78,7 @@ function computeResults(t: TransformSettings, q: QuantizationSettings, imageType
     imageType === 'Biomedical'   ? 0.82 :
                                    1.00;
 
-  let cr = q.lossless ? Math.max(3, 5 * typeBonus) : Math.max(16, baseCR * typeBonus);
+  let cr = q.lossless ? Math.max(3, 5 * typeBonus) : Math.max(16, baseCR * typeBonus * sparsityBoost);
 
   psnr = q.lossless ? 50 : Math.max(14, psnr);
 
@@ -59,7 +86,7 @@ function computeResults(t: TransformSettings, q: QuantizationSettings, imageType
     mse: +mse.toFixed(2),
     psnr: +psnr.toFixed(2),
     compressionRatio: `${cr.toFixed(1)}:1`,
-    sparsityRatio: `${Math.min(98, sp).toFixed(0)}%`,
+    sparsityRatio: `${Math.min(98, Math.max(0, sparsity)).toFixed(0)}%`,
   };
 }
 
