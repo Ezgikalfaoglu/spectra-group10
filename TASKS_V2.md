@@ -6,7 +6,7 @@
 > 1. JPEG'in 8×8 blok visualizasyonu olmalı (6×6 değil) ve **her hücrede gerçek matematik değerleri** görünsün.
 > 2. **CR (compression ratio)** çok küçük geliyor — minimum 16 olmalı, yükseldikçe görünür bozulma artmalı.
 > 3. Natural / AI-generated / Fingerprint vb. veri tipleriyle "training" mantığı kurulmalı.
-> 4. Sürüm-1'den bu yana 2 yeni sayfa eklendi: **Preprocessing** ve **Entropy** — bunların sahibi yok, dağıtılmalı.
+> 4. Sürüm-1'den bu yana 2 yeni sayfa eklendi: **Preprocessing** (Gül Deniz) ve **Entropy** (Berfin).
 
 > **Iter-3 (QA pass — May 2026):** Tüm pipeline 5 farklı görüntü tipiyle E2E test edildi
 > (Natural, AI Generated, Synthetic, Fingerprint, Biomedical). Bulunan tüm runtime ve UI
@@ -157,12 +157,12 @@
 ## 2 · Gül Deniz Özdemir — Upload + Preprocessing
 
 **Branch:** `feature/upload-guldeniz`  
-**Dosyalar:** `UploadPage.tsx` · **`PreprocessingPage.tsx`** *(yeni — sahibi sensin)*
+**Dosyalar:** `UploadPage.tsx` · `PreprocessingPage.tsx`
 
 ### Iter-2 görevleri
 - [x] **Upload — Image type seçici**: "AI Generated" tipi eklendi (`src/app/pages/UploadPage.tsx`)
 - [ ] **Upload — Type profile preview**: Tip seçilince altında "Bu tip için Spectra'nın trained preset'i" mini özet kartı (mavi/cyan badge ile) göster — `getProfile()` çağırıp method/wavelet/step özetle
-- [ ] **Preprocessing sayfası — sahiplen**: `src/app/pages/PreprocessingPage.tsx`
+- [ ] **Preprocessing sayfası**: `src/app/pages/PreprocessingPage.tsx`
   - Mevcut: yalnızca color-space seçici (YCbCr / RGB / Luma)
   - Eklenecek: profil önerisi banner'ı (`TypePresetBanner` zaten yok, sen ekle çağrısı: `<TypePresetBanner stage="..." onApply={...} />`)
   - Eklenecek: Sağdaki kanal görselleştirmesinin altında **histogram mini chart** (mock veri yeterli) — luma dağılımının nasıl değiştiğini göster
@@ -235,14 +235,14 @@
 ## 4 · Ayşe Berfin Özçelik — Quantization + Entropy
 
 **Branch:** `feature/quantization-berfin`  
-**Dosyalar:** `QuantizationPage.tsx` · **`EntropyPage.tsx`** *(yeni — sahibi sensin)*
+**Dosyalar:** `QuantizationPage.tsx` · `EntropyPage.tsx`
 
 ### Iter-2 görevleri
 - [x] **CR formülü güncellendi**: `estimateMetrics` → `baseCR = 16 + (s/64)^0.85 × 64` → minimum 16, max ~80
 - [x] **PSNR floor**: 16 dB'ye düştü (eskiden 20 dB) — yüksek Δ'da net bozulma
 - [ ] **Quantization — quality scale gradient**: Görselin sağ panelinde renk skalası (yeşil → klein → amber → rust) — handle pozisyonu sayısal değerle (Δ=18) iliştirilsin (ipucu: zaten var ama daha okunaklı yap)
 - [ ] **Quantization — kart üzerinde matrix preview**: 8×8 örnek DCT matrisinin Δ=stepSize ile bölünüp yuvarlanmış halini canlı göster (DCTBlockPanel'i quantized=true prop'uyla yeniden kullanabilirsin — Fatmanur'la koordine et)
-- [ ] **Entropy sayfası — sahiplen**: `src/app/pages/EntropyPage.tsx`
+- [ ] **Entropy sayfası**: `src/app/pages/EntropyPage.tsx`
   - Mevcut: coder seçici (Default Huffman, Custom Huffman, Arithmetic) + canlı bpp / CR önizleme + sembol frekans bar chart
   - Eklenecek: Bar chart üzerine seçili coder'a göre **renk değişikliği** (Default → klein, Custom → leaf, Arithmetic → plum)
   - Eklenecek: `TypePresetBanner stage="entropy"` çağrısı — coder otomatik öneri
@@ -368,23 +368,6 @@
 
 ---
 
-## 7 · Yeni özellik — "Training Lab" (opsiyonel, ekibe açık)
-
-**Sahibi:** Henüz atanmamış · Ezgi'ye sor
-
-Hocanın "image type'larla training" isteğine **görsel karşılık** olacak yeni mini sayfa fikri:
-
-`/training` (yeni route)
-- 5 image type kartı (Natural, AI Gen, Synthetic, Fingerprint, Biomedical)
-- Her kart üzerinde: tipin "trained" preset'i + örnek metric (CR/PSNR/Sparsity)
-- Her kart "Run benchmark" butonu → Process pipeline'ını o preset ile çalıştır → tablo dolar
-- Hoca'ya tek bakışta "biz tüm bu tiplerle test ettik" görüntüsü verir
-- Beklenen efor: 4-6 saat
-
-İlgilenen varsa Ezgi'ye söylesin — yeni branch açılır: `feature/training-<owner>`.
-
----
-
 ## Profile referansı (lib/imageTypeProfiles.ts)
 
 | Type | Method | Wavelet | Level | Δ | Lossless | Coder | CR bonus | Accent |
@@ -401,10 +384,10 @@ Hocanın "image type'larla training" isteğine **görsel karşılık** olacak ye
 
 ```
 /upload         → feature/upload-guldeniz   → Gül Deniz
-/preprocessing  → feature/upload-guldeniz   → Gül Deniz   (yeni)
+/preprocessing  → feature/upload-guldeniz   → Gül Deniz
 /transform      → feature/transform-fatmanur → Fatmanur
 /quantization   → feature/quantization-berfin → Berfin
-/entropy        → feature/quantization-berfin → Berfin    (yeni)
+/entropy        → feature/quantization-berfin → Berfin
 /processing     → feature/processing-melike → Melike
 /results        → feature/results-azra      → Azra
 /history        → feature/results-azra      → Azra
