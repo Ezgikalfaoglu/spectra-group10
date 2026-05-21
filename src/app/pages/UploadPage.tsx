@@ -79,6 +79,62 @@ const normalizeFormat = (ext: string) => {
   return ext.toUpperCase();
 };
 
+// Shrink + re-encode big images so the dataUrl fits in localStorage's ~5 MB
+// quota. The pipeline rescales internally to ≤512 anyway — 1024 / q=0.85
+// is more than enough for the preview and the analysis pass.
+const MAX_STORAGE_SIDE = 1024;
+const STORAGE_QUALITY = 0.85;
+const SAFE_DATAURL_BYTES = 900_000;
+
+function compressForStorage(dataUrl: string, w: number, h: number): Promise<string> {
+  return new Promise((resolve) => {
+    const maxDim = Math.max(w, h);
+    if (maxDim <= MAX_STORAGE_SIDE && dataUrl.length < SAFE_DATAURL_BYTES) {
+      resolve(dataUrl);
+      return;
+    }
+    const img = new window.Image();
+    img.onload = () => {
+      const scale = Math.min(1, MAX_STORAGE_SIDE / maxDim);
+      const nw = Math.max(1, Math.round(w * scale));
+      const nh = Math.max(1, Math.round(h * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = nw;
+      canvas.height = nh;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { resolve(dataUrl); return; }
+      ctx.drawImage(img, 0, 0, nw, nh);
+      try {
+        resolve(canvas.toDataURL('image/jpeg', STORAGE_QUALITY));
+      } catch {
+        resolve(dataUrl);
+      }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+// Quota-safe localStorage write. On QuotaExceededError, retries once without
+// the heavy dataUrl field so navigation can still proceed.
+function safeSetUpload(value: object): void {
+  const json = JSON.stringify(value);
+  try {
+    localStorage.setItem('spectra_upload', json);
+    return;
+  } catch {
+    // Drop dataUrl and retry — downstream pages handle missing dataUrl.
+    try {
+      localStorage.setItem(
+        'spectra_upload',
+        JSON.stringify({ ...(value as object), dataUrl: '' }),
+      );
+    } catch {
+      // Give up — navigation will still happen.
+    }
+  }
+}
+
 /* ── Detect RGB vs Grayscale by sampling pixels via canvas ── */
 const detectColorMode = (dataUrl: string): Promise<string> => {
   return new Promise((resolve) => {
@@ -167,6 +223,7 @@ export function UploadPage() {
         const finalize = async (w: number, h: number) => {
           const colorMode = await detectColorMode(dataUrl);
           const format = normalizeFormat(ext);
+          const storageUrl = await compressForStorage(dataUrl, w, h);
 
           const uploadedFile: UploadedFile = {
             name: f.name,
@@ -174,7 +231,7 @@ export function UploadPage() {
             resolution: `${w} × ${h}`,
             colorMode,
             sizeKB: Math.round(f.size / 1024),
-            dataUrl,
+            dataUrl: storageUrl,
             imageType: file && !isDemo ? file.imageType : 'Natural',
           };
 
@@ -183,7 +240,7 @@ export function UploadPage() {
           setIsDemo(false);
           setErrorFileName('');
 
-          localStorage.setItem('spectra_upload', JSON.stringify(uploadedFile));
+          safeSetUpload(uploadedFile);
         };
 
         img.onload = () => finalize(img.width, img.height);
@@ -226,7 +283,7 @@ export function UploadPage() {
     setFile(updatedFile);
 
     if (!isDemo) {
-      localStorage.setItem('spectra_upload', JSON.stringify(updatedFile));
+      safeSetUpload(updatedFile);
     }
   };
 
@@ -241,7 +298,7 @@ export function UploadPage() {
   const handleNext = () => {
     if (!file || isDemo) return;
 
-    localStorage.setItem('spectra_upload', JSON.stringify(file));
+    safeSetUpload(file);
     navigate('/preprocessing');
   };
 

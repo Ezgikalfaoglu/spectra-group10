@@ -3,7 +3,7 @@
  * ─────────────────────────────────────────────────────────
  * Responsibilities:
  *   • Transform method selection (JPEG/DCT vs JPEG2000/DWT)
- *   • Wavelet filter selection (Haar, db2, db4) — J2K only
+ *   • Wavelet filter selection (haar, db2, db3, db4, db6, db8, db12) — J2K only
  *   • Decomposition level control (1–5) — J2K only
  *   • Shows live preview of how DWT subbands are structured
  *   • Reads localStorage["spectra_upload"]
@@ -56,13 +56,33 @@ const WAVELET_INFO: Record<string, { full: string; description: string; quality:
   },
   db2: {
     full: 'Daubechies-2',
-    description: 'Smoother than Haar. Good trade-off between complexity and reconstruction quality.',
+    description: '4-tap. Smoother than Haar — basic trade-off between complexity and quality.',
+    quality: 'Moderate',
+  },
+  db3: {
+    full: 'Daubechies-3',
+    description: '6-tap. Smoother than db2, lighter than db4. Good for piecewise-smooth content.',
     quality: 'Moderate',
   },
   db4: {
     full: 'Daubechies-4',
-    description: 'Best spatial-frequency localisation. Preferred for natural images and photographic content.',
+    description: '8-tap. Strong spatial-frequency localisation. Common default for natural images.',
     quality: 'High',
+  },
+  db6: {
+    full: 'Daubechies-6',
+    description: '12-tap. Better frequency selectivity. Costs more compute per level.',
+    quality: 'High',
+  },
+  db8: {
+    full: 'Daubechies-8',
+    description: '16-tap. Excellent for textured / photographic content. Slower.',
+    quality: 'Very High',
+  },
+  db12: {
+    full: 'Daubechies-12',
+    description: '24-tap. Maximum-smoothness option. Use for very large images or research only.',
+    quality: 'Extreme',
   },
 };
 
@@ -330,7 +350,7 @@ export function TransformPage() {
                         Wavelet Filter
                       </label>
                       <div style={{ display: 'flex', gap: 6 }}>
-                        {(['haar', 'db2', 'db4'] as const).map(w => (
+                        {(['haar', 'db2', 'db3', 'db4', 'db6', 'db8', 'db12'] as const).map(w => (
                           <button
                             key={w}
                             onClick={() => update('waveletFilter', w)}
@@ -394,7 +414,7 @@ export function TransformPage() {
                 ...(settings.method === 'jpeg2000' ? [
                   { label: 'Wavelet filter', value: WAVELET_INFO[settings.waveletFilter]?.full ?? settings.waveletFilter },
                   { label: 'Decomposition level', value: `Level ${settings.decompositionLevel}` },
-                  { label: 'Subband count', value: `${Math.pow(4, settings.decompositionLevel)} bands (packet)` },
+                  { label: 'Subband count', value: `${subbandStats?.length ?? '—'} leaves (adaptive)` },
                 ] : [
                   { label: 'Block size', value: '8 × 8 px' },
                   { label: 'Basis functions', value: '64 cosine' },
@@ -480,7 +500,7 @@ export function TransformPage() {
                       <DWTSubbandsViz
                         level={settings.decompositionLevel}
                         active={true}
-                        coefficients={subbandStats?.map(s => ({ chain: s.chain, value: s.meanSigned }))}
+                        coefficients={subbandStats?.map(s => ({ chain: s.chain, depth: s.depth, value: s.meanSigned }))}
                       />
                     </motion.div>
                   </AnimatePresence>
@@ -505,7 +525,7 @@ export function TransformPage() {
             <Info style={{ width: 13, height: 13, color: 'var(--klein)', marginTop: 1, flexShrink: 0 }} />
             <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--ink-2)', lineHeight: 1.6, letterSpacing: '0.02em' }}>
               {settings.method === 'jpeg2000'
-                ? `At Level ${settings.decompositionLevel}, the 4-filter bank (LL · HL · LH · HH) is applied recursively to every subband, yielding ${Math.pow(4, settings.decompositionLevel)} bands (wavelet-packet decomposition). ${settings.decompositionLevel >= 3 ? 'High levels give finer frequency resolution at the cost of processing time.' : 'Level 2 (16 bands) balances frequency selectivity and runtime for most natural images.'}`
+                ? `At Level ${settings.decompositionLevel}, splitting is governed by an image-adaptive, level-dependent variance threshold with per-filter normalisation and a depth-scaled noise floor. LL (approximation) bands always recurse (classical Mallat pyramid baseline); detail bands (HL · LH · HH) recurse only when their variance exceeds max(max(50, 200/depth), 5% × imageVariance × (1 + 0.5 × depth) / √vanishingMoments). The floor is high at depth 1 (200) so banding / quantisation noise in smooth photos doesn't trigger false splits, and relaxes at deeper levels (50) so real texture detail can still recurse. Smooth photos stay close to the pyramid (~${3 * settings.decompositionLevel + 1} leaves) for every filter; leopard / fingerprint / dense-weave content triggers extra packet splits across all filters. Current image produced ${subbandStats?.length ?? 0} leaf subbands (max possible: ${Math.pow(4, settings.decompositionLevel)}).`
                 : 'JPEG DCT is the fastest option. Ideal for web delivery where file size is critical. For archival or medical use, prefer JPEG2000.'
               }
             </p>

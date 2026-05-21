@@ -14,7 +14,8 @@ const FILTER_ENERGY: Record<Filter, number> = { LL: 0.78, HL: 0.10, LH: 0.10, HH
 const FILTER_POS: Record<Filter, [number, number]> = { LL: [0, 0], HL: [0, 1], LH: [1, 0], HH: [1, 1] };
 
 export interface SubbandCoef {
-  chain: string; // "LLHL" — 2 chars per filter step
+  chain: string; // "LLHL" — 2 chars per filter step (length = 2*depth)
+  depth: number; // split steps applied — used for cell span (1 << (maxLevel-depth))
   value: number; // signed mean of subband (display value)
 }
 
@@ -22,6 +23,7 @@ interface BandCell {
   chain: Filter[];
   row: number;
   col: number;
+  span: number;  // grid-cell span — leaves at shallow depth are bigger
   value: number;
   energy: number;
 }
@@ -36,7 +38,7 @@ function buildBands(level: number): BandCell[] {
       // Signed pseudo-coefficient — alternating sign based on chain to look realistic
       const signSeed = chain.reduce((s, f) => s + (f === 'HL' ? 1 : f === 'LH' ? 2 : f === 'HH' ? 3 : 0), 0);
       const sign = signSeed % 2 === 0 ? 1 : -1;
-      cells.push({ chain, row, col, value: sign * energy, energy });
+      cells.push({ chain, row, col, span: 1, value: sign * energy, energy });
       return;
     }
     const half = blockSize / 2;
@@ -112,24 +114,23 @@ export function DWTSubbandsViz({
 }) {
   const lvl = Math.max(1, Math.min(5, level));
   const size = 1 << lvl;
-  const expectedCount = size * size;
-  const useReal = coefficients && coefficients.length === expectedCount;
+  const useReal = !!coefficients && coefficients.length > 0;
 
   const bands: BandCell[] = useReal
     ? coefficients!.map((c) => {
         const chain = chainStringToFilters(c.chain);
         const { row, col } = chainToGridPos(chain, lvl);
-        return { chain, row, col, value: c.value, energy: Math.abs(c.value) };
+        const span = 1 << Math.max(0, lvl - chain.length);
+        return { chain, row, col, span, value: c.value, energy: Math.abs(c.value) };
       })
     : buildBands(lvl);
 
   // Per-level visual scale. L4/L5 hide text (cells too small).
   const cellPx = lvl === 1 ? 96 : lvl === 2 ? 48 : lvl === 3 ? 28 : lvl === 4 ? 14 : 7;
-  const showValues = lvl <= 3;
-  const showLabels = lvl <= 2;
   const valueFontSize = lvl === 1 ? 13 : lvl === 2 ? 10 : 7;
   // L4/L5: skip per-cell motion + use solid colors (256/1024 motion.divs lag the UI).
-  const useMotion = lvl <= 3;
+  // For adaptive output, switch on the actual cell count instead of lvl.
+  const useMotion = bands.length <= 64;
 
   return (
     <div className="flex flex-col items-center gap-3">
@@ -148,26 +149,30 @@ export function DWTSubbandsViz({
       >
         {bands.map((b) => {
           const cellStyle = {
-            gridColumn: b.col + 1,
-            gridRow: b.row + 1,
+            gridColumn: `${b.col + 1} / span ${b.span}`,
+            gridRow: `${b.row + 1} / span ${b.span}`,
             background: useMotion ? cellPattern(b.chain) : cellSolidColor(b.chain),
           };
           const cellClass = useMotion
             ? 'relative overflow-hidden rounded-[3px] border border-cyan-300/60'
             : 'relative overflow-hidden';
+          // Effective on-screen size — large leaves get labels even at high maxLevel.
+          const effPx = cellPx * b.span + (b.span - 1) * 2;
+          const showThisLabel = effPx >= 36;
+          const showThisValue = effPx >= 22;
           const content = (
             <>
-              {showLabels && (
+              {showThisLabel && (
                 <span className="absolute top-0.5 left-1 font-mono font-bold text-[8px] text-white/95 drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)] leading-none">
                   {b.chain.join('')}
                 </span>
               )}
-              {showValues && (
+              {showThisValue && (
                 <span
                   className="absolute inset-0 flex items-center justify-center font-mono font-semibold tracking-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.55)] px-0.5"
                   style={{ fontSize: valueFontSize, lineHeight: 1 }}
                 >
-                  {lvl >= 3
+                  {effPx < 40
                     ? (Math.abs(b.value) >= 100 ? b.value.toFixed(0) : Math.abs(b.value) >= 10 ? b.value.toFixed(1) : Math.abs(b.value) >= 1 ? b.value.toFixed(1) : b.value.toFixed(2))
                     : (Math.abs(b.value) >= 100 ? b.value.toFixed(0) : Math.abs(b.value) >= 10 ? b.value.toFixed(1) : Math.abs(b.value) >= 1 ? b.value.toFixed(2) : b.value.toFixed(3))}
                 </span>
@@ -207,7 +212,7 @@ export function DWTSubbandsViz({
 
       <div className="flex flex-col items-center gap-1.5">
         <div className="font-mono text-[10px] tracking-[0.18em] uppercase text-slate-500">
-          {bands.length} subbands · level {lvl} · 4-filter packet
+          {bands.length} subbands · level {lvl} · adaptive packet
         </div>
         <div className="flex gap-3 text-[10px] font-mono text-slate-500">
           <span className="flex items-center gap-1.5">
