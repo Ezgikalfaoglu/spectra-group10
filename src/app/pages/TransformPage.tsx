@@ -22,6 +22,7 @@ import { PipelineStepper } from '../components/PipelineStepper';
 import { DWTSubbandsViz } from '../components/DWTSubbandsViz';
 import { DCTBlockPanel } from '../components/DCTBlockPanel';
 import { TypePresetBanner } from '../components/TypePresetBanner';
+import { waveletPacket2D, imageDataToGray, type SubbandStat, type Filter } from '../lib/dwt';
 
 interface TransformSettings {
   method: 'jpeg' | 'jpeg2000';
@@ -74,6 +75,7 @@ export function TransformPage() {
     waveletFilter: 'db4',
     decompositionLevel: 2,
   });
+  const [subbandStats, setSubbandStats] = useState<SubbandStat[] | null>(null);
 
   useEffect(() => {
     const upload = localStorage.getItem('spectra_upload');
@@ -85,15 +87,71 @@ export function TransformPage() {
     }
     const saved = localStorage.getItem('spectra_transform');
     if (saved) {
-      try { setSettings(JSON.parse(saved)); } catch {}
+      try {
+        const parsed = JSON.parse(saved);
+        // Strip persisted subbandStats — they'll be recomputed for the current image+settings.
+        const { subbandStats: _drop, ...rest } = parsed;
+        setSettings(rest);
+      } catch {}
     }
   }, []);
+
+  // Real wavelet-packet decomposition. Recomputes whenever image or J2K settings change.
+  useEffect(() => {
+    if (settings.method !== 'jpeg2000' || !uploadData?.dataUrl) {
+      setSubbandStats(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const img = new Image();
+        img.src = uploadData.dataUrl;
+        await img.decode();
+        const minDim = Math.min(img.width, img.height);
+        const minNeeded = 1 << settings.decompositionLevel;
+        if (minDim < minNeeded) {
+          if (!cancelled) setSubbandStats(null);
+          return;
+        }
+        const log2Side = Math.floor(Math.log2(minDim));
+        const targetSide = Math.min(512, 1 << log2Side);
+        if (targetSide < minNeeded) {
+          if (!cancelled) setSubbandStats(null);
+          return;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = targetSide;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          if (!cancelled) setSubbandStats(null);
+          return;
+        }
+        const sx = (img.width - minDim) / 2;
+        const sy = (img.height - minDim) / 2;
+        ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, targetSide, targetSide);
+        const imgData = ctx.getImageData(0, 0, targetSide, targetSide);
+        const { data: gray, side } = imageDataToGray(imgData, targetSide);
+        const result = waveletPacket2D(gray, side, settings.waveletFilter as Filter, settings.decompositionLevel);
+        if (!cancelled) setSubbandStats(result.subbands);
+      } catch {
+        if (!cancelled) setSubbandStats(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [uploadData?.dataUrl, settings.method, settings.waveletFilter, settings.decompositionLevel]);
 
   const update = <K extends keyof TransformSettings>(key: K, value: TransformSettings[K]) =>
     setSettings(s => ({ ...s, [key]: value }));
 
   const handleNext = () => {
-    localStorage.setItem('spectra_transform', JSON.stringify(settings));
+    const payload = subbandStats ? { ...settings, subbandStats } : settings;
+    try {
+      localStorage.setItem('spectra_transform', JSON.stringify(payload));
+    } catch {
+      // quota — drop subbandStats and retry
+      localStorage.setItem('spectra_transform', JSON.stringify(settings));
+    }
     navigate('/quantization');
   };
 
@@ -413,7 +471,11 @@ export function TransformPage() {
                       exit={{ opacity: 0 }}
                       transition={{ duration: 0.25 }}
                     >
-                      <DWTSubbandsViz level={settings.decompositionLevel} active={true} />
+                      <DWTSubbandsViz
+                        level={settings.decompositionLevel}
+                        active={true}
+                        coefficients={subbandStats?.map(s => ({ chain: s.chain, value: s.meanSigned }))}
+                      />
                     </motion.div>
                   </AnimatePresence>
                 </div>
