@@ -14,14 +14,33 @@ interface EntropySettings {
   coder: 'huffman-default' | 'huffman-custom' | 'arithmetic';
 }
 
+interface ImageResolution {
+  width: number;
+  height: number;
+}
+
 const DEFAULTS: EntropySettings = {
   coder: 'huffman-default',
 };
 
 const CODER_IDS = ['huffman-default', 'huffman-custom', 'arithmetic'] as const;
+const DEFAULT_RESOLUTION: ImageResolution = { width: 1024, height: 1024 };
 
 function isCoder(value: unknown): value is EntropySettings['coder'] {
   return typeof value === 'string' && (CODER_IDS as readonly string[]).includes(value);
+}
+
+function parseResolution(raw: unknown): ImageResolution {
+  if (typeof raw !== 'string') return DEFAULT_RESOLUTION;
+  const match = raw.match(/(\d+)\D+(\d+)/);
+  if (!match) return DEFAULT_RESOLUTION;
+
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return DEFAULT_RESOLUTION;
+  }
+  return { width, height };
 }
 
 const CODERS: { id: EntropySettings['coder']; label: string; sub: string; desc: string }[] = [
@@ -43,6 +62,7 @@ function estimateBitRate(coder: EntropySettings['coder']) {
 export function EntropyPage() {
   const navigate = useNavigate();
   const [settings, setSettings] = useState<EntropySettings>(DEFAULTS);
+  const [imageResolution, setImageResolution] = useState<ImageResolution>(DEFAULT_RESOLUTION);
 
   useEffect(() => {
     const saved = localStorage.getItem('spectra_entropy');
@@ -52,6 +72,14 @@ export function EntropyPage() {
         setSettings({
           coder: isCoder(parsed?.coder) ? parsed.coder : DEFAULTS.coder,
         });
+      } catch {}
+    }
+
+    const upload = localStorage.getItem('spectra_upload');
+    if (upload) {
+      try {
+        const parsed = JSON.parse(upload);
+        setImageResolution(parseResolution(parsed?.resolution));
       } catch {}
     }
   }, []);
@@ -66,7 +94,8 @@ export function EntropyPage() {
 
   const bpp = estimateBitRate(settings.coder);
   const cr = (8 / bpp).toFixed(1);
-  const estimatedKB = Math.round((1024 * 1024 * bpp) / (8 * 1024));
+  const pixelCount = imageResolution.width * imageResolution.height;
+  const estimatedKB = Math.round((pixelCount * bpp) / (8 * 1024));
   const coderBarGradient = {
     'huffman-default': 'linear-gradient(180deg, var(--klein) 0%, rgba(30,42,255,0.4) 100%)',
     'huffman-custom': 'linear-gradient(180deg, var(--leaf) 0%, rgba(31,138,94,0.4) 100%)',
@@ -209,7 +238,7 @@ export function EntropyPage() {
                   <span style={{ fontFamily: 'var(--font-mono)', fontStyle: 'normal', fontSize: 11, color: 'var(--klein)', marginLeft: 6 }}>KB</span>
                 </div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--ink-4)', marginTop: 4 }}>
-                  1024 × 1024 · {bpp} bpp
+                  {imageResolution.width} × {imageResolution.height} · {bpp} bpp
                 </div>
               </div>
 
