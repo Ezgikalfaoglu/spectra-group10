@@ -9,6 +9,8 @@ import { motion } from 'motion/react';
 import { Code2, ArrowRight, Info } from 'lucide-react';
 import { PipelineStepper } from '../components/PipelineStepper';
 import { TypePresetBanner } from '../components/TypePresetBanner';
+import { computeMetrics } from '../lib/pipeline';
+import type { SubbandStat } from '../lib/dwt';
 
 interface EntropySettings {
   coder: 'huffman-default' | 'huffman-custom' | 'arithmetic';
@@ -19,12 +21,24 @@ interface ImageResolution {
   height: number;
 }
 
+interface QuantState {
+  stepSize: number;
+  lossless: boolean;
+}
+
+interface TransformState {
+  method: 'jpeg' | 'jpeg2000';
+  subbandStats?: SubbandStat[];
+}
+
 const DEFAULTS: EntropySettings = {
   coder: 'huffman-default',
 };
 
 const CODER_IDS = ['huffman-default', 'huffman-custom', 'arithmetic'] as const;
 const DEFAULT_RESOLUTION: ImageResolution = { width: 1024, height: 1024 };
+const DEFAULT_QUANT: QuantState = { stepSize: 18, lossless: false };
+const DEFAULT_TRANSFORM: TransformState = { method: 'jpeg2000' };
 
 function isCoder(value: unknown): value is EntropySettings['coder'] {
   return typeof value === 'string' && (CODER_IDS as readonly string[]).includes(value);
@@ -52,17 +66,14 @@ const CODERS: { id: EntropySettings['coder']; label: string; sub: string; desc: 
     desc: 'Range / arithmetic coding (MQ coder for J2K). Higher compression ratio than Huffman, slightly slower.' },
 ];
 
-function estimateBitRate(coder: EntropySettings['coder']) {
-  let bpp = 0.92;
-  if (coder === 'huffman-custom') bpp -= 0.06;
-  if (coder === 'arithmetic') bpp -= 0.12;
-  return Math.max(0.32, +bpp.toFixed(2));
-}
 
 export function EntropyPage() {
   const navigate = useNavigate();
   const [settings, setSettings] = useState<EntropySettings>(DEFAULTS);
   const [imageResolution, setImageResolution] = useState<ImageResolution>(DEFAULT_RESOLUTION);
+  const [imageType, setImageType] = useState('Natural');
+  const [quant, setQuant] = useState<QuantState>(DEFAULT_QUANT);
+  const [transform, setTransform] = useState<TransformState>(DEFAULT_TRANSFORM);
 
   useEffect(() => {
     const saved = localStorage.getItem('spectra_entropy');
@@ -80,6 +91,28 @@ export function EntropyPage() {
       try {
         const parsed = JSON.parse(upload);
         setImageResolution(parseResolution(parsed?.resolution));
+        if (parsed?.imageType) setImageType(String(parsed.imageType));
+      } catch {}
+    }
+
+    const quantRaw = localStorage.getItem('spectra_quantization');
+    if (quantRaw) {
+      try {
+        const parsed = JSON.parse(quantRaw);
+        const lossless = !!parsed?.lossless;
+        const stepSize = lossless ? 1 : Number(parsed?.stepSize) || DEFAULT_QUANT.stepSize;
+        setQuant({ stepSize, lossless });
+      } catch {}
+    }
+
+    const transformRaw = localStorage.getItem('spectra_transform');
+    if (transformRaw) {
+      try {
+        const parsed = JSON.parse(transformRaw);
+        setTransform({
+          method: parsed?.method === 'jpeg' ? 'jpeg' : 'jpeg2000',
+          subbandStats: Array.isArray(parsed?.subbandStats) ? parsed.subbandStats : undefined,
+        });
       } catch {}
     }
   }, []);
@@ -92,10 +125,20 @@ export function EntropyPage() {
     navigate('/processing');
   };
 
-  const bpp = estimateBitRate(settings.coder);
-  const cr = (8 / bpp).toFixed(1);
+  // Same model as the Processing result — Entropy preview matches the final CR.
+  const metrics = computeMetrics({
+    method: transform.method,
+    subbandStats: transform.subbandStats,
+    stepSize: quant.stepSize,
+    lossless: quant.lossless,
+    imageType,
+    coder: settings.coder,
+  });
+  const bppExact = 8 / metrics.cr;
+  const bpp = +bppExact.toFixed(2);
+  const cr = metrics.cr.toFixed(1);
   const pixelCount = imageResolution.width * imageResolution.height;
-  const estimatedKB = Math.round((pixelCount * bpp) / (8 * 1024));
+  const estimatedKB = Math.max(1, Math.round((pixelCount * bppExact) / (8 * 1024)));
   const coderBarGradient = {
     'huffman-default': 'linear-gradient(180deg, var(--klein) 0%, rgba(30,42,255,0.4) 100%)',
     'huffman-custom': 'linear-gradient(180deg, var(--leaf) 0%, rgba(31,138,94,0.4) 100%)',

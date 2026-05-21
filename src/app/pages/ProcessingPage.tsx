@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { PipelineStepper } from '../components/PipelineStepper';
 import type { SubbandStat } from '../lib/dwt';
+import { computeMetrics, type Coder } from '../lib/pipeline';
 
 const query = new URLSearchParams(window.location.search);
 const failStep = query.get('fail') ? Number(query.get('fail')) : null;
@@ -21,6 +22,9 @@ interface TransformSettings {
 }
 interface QuantizationSettings {
   quantizationType: 'uniform' | 'scalar'; stepSize: number; lossless: boolean;
+}
+interface EntropySettings {
+  coder: Coder;
 }
 interface Results {
   mse: number; psnr: number; compressionRatio: string; sparsityRatio: string;
@@ -37,56 +41,25 @@ const PIPELINE_STAGES = [
 
 const STEP_DURATION = 800;
 
-function computeResults(t: TransformSettings, q: QuantizationSettings, imageType: string): Results {
-  const s = q.lossless ? 1 : q.stepSize;
-
-  let psnr = 38 - s * 0.9;
-  let mse = (s * s) / 180;
-  const baseCR = 16 + Math.pow(s / 64, 0.85) * 64;
-
-  // Sparsity from real subband distribution when J2K stats are present.
-  // After uniform quantization, |c| < step/2 → zero. Per-subband zero-fraction
-  // approximated from meanAbs, then area-weighted across all subbands.
-  let sparsity: number;
-  let sparsityBoost = 1.0;
-
-  if (t.method === 'jpeg2000' && t.subbandStats && t.subbandStats.length) {
-    if (q.lossless) {
-      sparsity = 0;
-    } else {
-      let zeroSum = 0, weightSum = 0;
-      for (const b of t.subbandStats) {
-        const w = b.size * b.size;
-        const denom = Math.max(0.001, b.meanAbs * 2);
-        const zf = Math.max(0, Math.min(0.98, 1 - denom / s));
-        zeroSum += zf * w;
-        weightSum += w;
-      }
-      sparsity = weightSum ? (zeroSum / weightSum) * 100 : 50 + s * 1.1;
-    }
-    // CR boost from sparsity — more zeros → better entropy coding gain.
-    sparsityBoost = 1 + (sparsity - 50) / 100;
-  } else {
-    sparsity = q.lossless ? 0 : 50 + s * 1.1;
-  }
-
-  // Image type bonus
-  const typeBonus =
-    imageType === 'AI Generated' ? 1.10 :
-    imageType === 'Synthetic'    ? 1.18 :
-    imageType === 'Fingerprint'  ? 0.78 :
-    imageType === 'Biomedical'   ? 0.82 :
-                                   1.00;
-
-  let cr = q.lossless ? Math.max(3, 5 * typeBonus) : Math.max(16, baseCR * typeBonus * sparsityBoost);
-
-  psnr = q.lossless ? 50 : Math.max(14, psnr);
-
+function computeResults(
+  t: TransformSettings,
+  q: QuantizationSettings,
+  imageType: string,
+  coder: Coder | undefined,
+): Results {
+  const m = computeMetrics({
+    method: t.method,
+    subbandStats: t.subbandStats,
+    stepSize: q.stepSize,
+    lossless: q.lossless,
+    imageType,
+    coder: coder ?? 'huffman-default',
+  });
   return {
-    mse: +mse.toFixed(2),
-    psnr: +psnr.toFixed(2),
-    compressionRatio: `${cr.toFixed(1)}:1`,
-    sparsityRatio: `${Math.min(98, Math.max(0, sparsity)).toFixed(0)}%`,
+    mse: m.mse,
+    psnr: m.psnr,
+    compressionRatio: m.crLabel,
+    sparsityRatio: `${m.sparsity}%`,
   };
 }
 
@@ -96,6 +69,7 @@ export function ProcessingPage() {
   const [upload, setUpload] = useState<UploadData | null>(null);
   const [transform, setTransform] = useState<TransformSettings | null>(null);
   const [quant, setQuant] = useState<QuantizationSettings | null>(null);
+  const [entropy, setEntropy] = useState<EntropySettings | null>(null);
 
   const [currentStep, setCurrentStep] = useState(-1);
   const [isRunning, setIsRunning] = useState(false);
@@ -115,10 +89,18 @@ export function ProcessingPage() {
     setUpload(JSON.parse(u));
     setTransform(JSON.parse(t));
     setQuant(JSON.parse(q));
+
+    // Entropy stage is optional — fall back to default coder if not visited.
+    const e = localStorage.getItem('spectra_entropy');
+    if (e) {
+      try { setEntropy(JSON.parse(e)); } catch { setEntropy({ coder: 'huffman-default' }); }
+    } else {
+      setEntropy({ coder: 'huffman-default' });
+    }
   }, []);
 
   useEffect(() => {
-    if (!upload || !transform || !quant) return;
+    if (!upload || !transform || !quant || !entropy) return;
 
     setIsRunning(true);
     setCurrentStep(0);
@@ -146,7 +128,7 @@ export function ProcessingPage() {
 
         if (idx === PIPELINE_STAGES.length - 1) {
           const finalId = window.setTimeout(() => {
-            const r = computeResults(transform, quant, upload.imageType);
+            const r = computeResults(transform, quant, upload.imageType, entropy.coder);
             setResults(r);
             setIsRunning(false);
             setIsDone(true);
@@ -162,6 +144,7 @@ export function ProcessingPage() {
               quantType: quant.quantizationType,
               stepSize: quant.lossless ? 1 : quant.stepSize,
               lossless: quant.lossless,
+              coder: entropy.coder,
               mse: r.mse,
               psnr: r.psnr,
               cr: r.compressionRatio,
@@ -173,6 +156,7 @@ export function ProcessingPage() {
                 decompositionLevel: transform.decompositionLevel,
                 quantizationType: quant.quantizationType,
                 stepSize: quant.lossless ? 1 : quant.stepSize,
+                coder: entropy.coder,
               },
             };
 
@@ -197,7 +181,7 @@ export function ProcessingPage() {
     return () => {
       timeouts.forEach((id) => window.clearTimeout(id));
     };
-  }, [upload, transform, quant]);
+  }, [upload, transform, quant, entropy]);
 
   useEffect(() => {
     if (!isDone) return;

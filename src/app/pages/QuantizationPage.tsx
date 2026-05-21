@@ -24,6 +24,8 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/app/compo
 import { PipelineStepper } from '../components/PipelineStepper';
 import { TypePresetBanner } from '../components/TypePresetBanner';
 import { DCTBlockPanel } from '../components/DCTBlockPanel';
+import { computeMetrics } from '../lib/pipeline';
+import type { SubbandStat } from '../lib/dwt';
 
 interface QuantizationSettings {
   quantizationType: 'uniform' | 'scalar';
@@ -35,33 +37,14 @@ interface StoredTransform {
   method: 'jpeg' | 'jpeg2000';
   waveletFilter: string;
   decompositionLevel: number;
-}
-
-function typeBonusFor(imageType: string) {
-  if (imageType === 'AI Generated') return 1.10;
-  if (imageType === 'Synthetic') return 1.18;
-  if (imageType === 'Fingerprint') return 0.78;
-  if (imageType === 'Biomedical') return 0.82;
-  return 1.00;
+  subbandStats?: SubbandStat[];
 }
 
 const DEFAULT_TRANSFORM: StoredTransform = {
   method: 'jpeg2000',
   waveletFilter: 'db4',
-  decompositionLevel: 3,
+  decompositionLevel: 2,
 };
-
-/* Preview math aligned with processing formulas; lossless keeps 2.4:1 UX target. */
-function estimateMetrics(stepSize: number, lossless: boolean, typeBonus: number) {
-  if (lossless) return { psnr: '∞', cr: '2.4:1' };
-  const estPSNR = Math.max(14, 38 - stepSize * 0.9).toFixed(1);
-  const baseCR = 16 + Math.pow(stepSize / 64, 0.85) * 64;
-  const estCR = `${Math.max(16, baseCR * typeBonus).toFixed(1)}:1`;
-  return {
-    psnr: estPSNR,
-    cr: estCR,
-  };
-}
 
 export function QuantizationPage() {
   const navigate = useNavigate();
@@ -127,8 +110,22 @@ export function QuantizationPage() {
   };
 
   const effectiveStep = settings.lossless ? 1 : settings.stepSize;
-  const metrics = estimateMetrics(effectiveStep, settings.lossless, typeBonusFor(uploadType));
-  const psnrValue = settings.lossless ? Infinity : Number(metrics.psnr);
+
+  // Live preview — same model as Entropy/Processing (coder defaults to the
+  // pipeline baseline since the entropy stage hasn't been visited yet).
+  const previewMetrics = computeMetrics({
+    method: transform?.method ?? 'jpeg2000',
+    subbandStats: transform?.subbandStats,
+    stepSize: settings.stepSize,
+    lossless: settings.lossless,
+    imageType: uploadType,
+    coder: 'huffman-default',
+  });
+  const metrics = {
+    psnr: settings.lossless ? '∞' : previewMetrics.psnr.toFixed(1),
+    cr: previewMetrics.crLabel,
+  };
+  const psnrValue = settings.lossless ? Infinity : previewMetrics.psnr;
   const psnrColor = psnrValue > 35
     ? 'var(--leaf)'
     : psnrValue >= 28
@@ -414,7 +411,7 @@ export function QuantizationPage() {
                       transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
                       style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 32, color: 'var(--leaf)', lineHeight: 1 }}
                     >
-                      2.4:1
+                      {metrics.cr}
                     </motion.div>
                   ) : (
                     <div style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 30, color: 'var(--ink)', lineHeight: 1 }}>
