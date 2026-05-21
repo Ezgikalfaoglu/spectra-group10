@@ -96,12 +96,18 @@ export function TransformPage() {
     }
   }, []);
 
-  // Real wavelet-packet decomposition. Recomputes whenever image or J2K settings change.
+  // Wavelet-packet analysis of the uploaded image. For JPEG2000 this is the
+  // actual transform (user's wavelet + level); for JPEG it still runs as an
+  // image-characterisation pass (fixed db4 / L2) so the DCT result reflects
+  // real image content instead of a step-size-only formula.
   useEffect(() => {
-    if (settings.method !== 'jpeg2000' || !uploadData?.dataUrl) {
+    if (!uploadData?.dataUrl) {
       setSubbandStats(null);
       return;
     }
+    const isJ2K = settings.method === 'jpeg2000';
+    const analysisFilter: Filter = isJ2K ? (settings.waveletFilter as Filter) : 'db4';
+    const analysisLevel = isJ2K ? settings.decompositionLevel : 2;
     let cancelled = false;
     (async () => {
       try {
@@ -109,7 +115,7 @@ export function TransformPage() {
         img.src = uploadData.dataUrl;
         await img.decode();
         const minDim = Math.min(img.width, img.height);
-        const minNeeded = 1 << settings.decompositionLevel;
+        const minNeeded = 1 << analysisLevel;
         if (minDim < minNeeded) {
           if (!cancelled) setSubbandStats(null);
           return;
@@ -132,7 +138,7 @@ export function TransformPage() {
         ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, targetSide, targetSide);
         const imgData = ctx.getImageData(0, 0, targetSide, targetSide);
         const { data: gray, side } = imageDataToGray(imgData, targetSide);
-        const result = waveletPacket2D(gray, side, settings.waveletFilter as Filter, settings.decompositionLevel);
+        const result = waveletPacket2D(gray, side, analysisFilter, analysisLevel);
         if (!cancelled) setSubbandStats(result.subbands);
       } catch {
         if (!cancelled) setSubbandStats(null);
