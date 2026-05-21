@@ -6,13 +6,109 @@
 > 1. JPEG'in 8×8 blok visualizasyonu olmalı (6×6 değil) ve **her hücrede gerçek matematik değerleri** görünsün.
 > 2. **CR (compression ratio)** çok küçük geliyor — minimum 16 olmalı, yükseldikçe görünür bozulma artmalı.
 > 3. Natural / AI-generated / Fingerprint vb. veri tipleriyle "training" mantığı kurulmalı.
-> 4. Sürüm-1'den bu yana 2 yeni sayfa eklendi: **Preprocessing** ve **Entropy** — bunların sahibi yok, dağıtılmalı.
+> 4. Sürüm-1'den bu yana 2 yeni sayfa eklendi: **Preprocessing** (Gül Deniz) ve **Entropy** (Berfin).
 
 > **Iter-3 (QA pass — May 2026):** Tüm pipeline 5 farklı görüntü tipiyle E2E test edildi
 > (Natural, AI Generated, Synthetic, Fingerprint, Biomedical). Bulunan tüm runtime ve UI
 > hataları `main`'e PM tarafından entegre edildi. Aşağıdaki her sahip için **Iter-3 görevleri**
 > bölümünde entegre edilen düzeltmeler `[x]` olarak işaretli; doğrulamaları gereken testler
 > ve hâlâ açık kalan implementation işleri `[ ]` olarak listelendi.
+
+---
+
+## Iter-4 · Hata düzeltme turu (filtre · quantization · compression)
+
+> **Durum: AÇIK — sahiplerine atandı, henüz düzeltilmedi.**
+> Ekipten ve denemelerden gelen 4 hata. Her sahip kendi `feature/...` branch'inde
+> çalışır → PR açar → Ezgi `main`'e merge eder. Branch'ler `main`'den güncel
+> alınmalı (`git pull --rebase origin <branch>`).
+
+### Özet tablo
+
+| # | Görev alanı | Problem | Yapılacak düzeltme | Atanan kişi | Öncelik |
+|---|---|---|---|---|---|
+| 1 | Transform filtreleri & DWT alt-bant mantığı | Filtre listesi kısa; bölme mantığı yanlış (tüm alt-bantlar bölünüyor) | Filtre ekle + varyans-tabanlı bölme | **Fatmanur Durak** | Yüksek |
+| 2 | Quantization'da DWT/DCT karışması | DWT seçiliyken DCT paneli de görünüyor | Metoda göre panel ayır | **Ayşe Berfin Özçelik** | Orta |
+| 3 | Compression: JPEG/JPEG2000 ayrımı | JPEG2000 sonucu JPEG sekmesi altında açılıyor | Sekme/metot ayrımını düzelt | **Azra Erbaş** | Yüksek |
+| 4 | Tam akış hata ayıklama / test | Akışta başka hatalar olabilir | Uçtan uca test | **Ezginur Kalfaoğlu** (PM) | Orta |
+
+---
+
+### Görev 1 — Fatmanur Durak · Transform filtreleri & DWT alt-bant mantığı
+
+**Branch:** `feature/transform-fatmanur`
+**Dosyalar:** `src/app/lib/dwt.ts` · `src/app/components/DWTSubbandsViz.tsx` · `src/app/pages/TransformPage.tsx`
+**Öncelik:** Yüksek
+
+- [ ] **Filtre listesini genişlet** — şu an sadece `haar, db2, db4` var. En az `db3, db6, db8` ekle.
+  - `dwt.ts` → `Filter` tipine yeni isimleri ekle + `FILTERS` tablosuna alçak-geçiren (lo) katsayılarını gir (hi otomatik QMF ile üretiliyor).
+  - `TransformPage.tsx` → `WAVELET_INFO` sözlüğüne ve wavelet `sp-pill` butonlarına yeni filtreleri ekle.
+- [ ] **Bölme mantığını düzelt — varyans tabanlı uyarlamalı bölme.**
+  - Mevcut durum: `waveletPacket2D` her alt-bandı maxLevel'e kadar **koşulsuz** bölüyor (tam wavelet-packet).
+  - İstenen: bir alt-bant **yalnızca varyansı yüksekse** bölünsün.
+    - Alt-bandın katsayı varyansını hesapla.
+    - Varyans eşiği aşıyorsa → 4'e böl (LL/HL/LH/HH) ve devam et.
+    - Düşükse → o alt-bandı **yaprak** bırak, gereksiz bölme.
+  - Sonuç: düz görüntü → az bölme (≈ klasik piramit), detaylı görüntü → çok bölme.
+- [ ] **LL/LH/HL/HH yerleşimini doğrula** — her bölme adımında 4 alt-bant doğru konuma yazılıyor mu.
+- [ ] **`DWTSubbandsViz` uyarlamalı çizime geçsin** — artık sabit `2^level × 2^level` grid değil; yapraklar farklı boyutta (derinliği az olan yaprak daha büyük hücre). Hücre `span`'ı = `2^(maxLevel − depth)`.
+- [ ] **Aşağı-akış uyumu** — alt-bant çıktısının şekli değişiyor (sabit `4^level` yerine değişken yaprak listesi). `pipeline.ts`/`computeMetrics` zaten `b.size` ile alan-ağırlıklı topluyor; yine de Berfin ve Azra'ya haber ver.
+
+**Test:** `npx vite build` hatasız; Transform'da J2K + farklı filtreler seçilince viz değişiyor; düz vs detaylı görüntüde bölme sayısı farklı.
+
+---
+
+### Görev 2 — Ayşe Berfin Özçelik · Quantization DWT/DCT ayrımı
+
+**Branch:** `feature/quantization-berfin`
+**Dosya:** `src/app/pages/QuantizationPage.tsx`
+**Öncelik:** Orta
+
+- [ ] **Bug:** Quantize ekranında "QUANTIZATION EFFECT · LIVE" kartı her zaman `DCTBlockPanel` (8×8 DCT bloğu) gösteriyor — transform DWT (jpeg2000) seçiliyken bile.
+- [ ] **Düzeltme:** kartı `transform.method`'a göre koşullu render et:
+  - `method === 'jpeg'` (DCT) → mevcut `DCTBlockPanel` kalsın.
+  - `method === 'jpeg2000'` (DWT) → DCT bloğu yerine **DWT alt-bant quantization önizlemesi** göster (örn. `DWTSubbandsViz`'i `transform.subbandStats` ile besle).
+- [ ] Kart başlığı da metoda göre değişsin ("DCT BLOCK QUANTIZATION" / "DWT SUBBAND QUANTIZATION").
+- [ ] Quantization Type segmenti (Uniform/Scalar) ve diğer seçenekler **yalnızca seçili transform ile alakalı** olanları göstersin — alakasız seçenek kalmasın.
+- [ ] `localStorage["spectra_transform"]` zaten okunuyor; `method` alanına göre dallandır.
+
+**Test:** Transform'da DWT seç → Quantize'da DCT bloğu görünmemeli. DCT seç → DCT bloğu görünmeli.
+
+---
+
+### Görev 3 — Azra Erbaş · Compression JPEG/JPEG2000 ayrımı
+
+**Branch:** `feature/results-azra`
+**Dosya:** `src/app/pages/ResultsPage.tsx`
+**Öncelik:** Yüksek
+
+- [ ] **Bug:** Sonuç ekranında `activeTab` varsayılanı sabit `'jpeg2000'`. Kullanıcı JPEG çalıştırdıysa sayfa yine JPEG2000 sekmesinde açılıyor; JPEG2000 çalıştırıldığında ise sonuç yanlış sekme altında görünebiliyor.
+- [ ] **Düzeltme:**
+  - `activeTab` başlangıç değeri **çalıştırılan metoda göre** (`ranTab`) belirlensin — JPEG çalıştıysa JPEG sekmesi, JPEG2000 çalıştıysa JPEG2000 sekmesi açık gelsin.
+  - Çalıştırılmayan metot sekmesi açıkça **"tahmini / çalıştırılmadı"** rozetiyle işaretlensin (türetilmiş `otherResult` gerçek sonuç sanılmasın).
+  - JPEG ve JPEG2000 net ayrılsın; her sekme yalnızca kendi metodunu temsil etsin.
+- [ ] JPEG2000 desteklenmiyorsa devre dışı bırak + açıklayıcı mesaj; destekleniyorsa kendi sekmesi/sonucu net olsun.
+
+**Test:** JPEG2000 çalıştır → Results JPEG2000 sekmesinde açılır, gerçek sonuç orada. JPEG sekmesi "tahmini" etiketli.
+
+---
+
+### Görev 4 — Ezginur Kalfaoğlu (PM) · Tam akış hata ayıklama & test
+
+**Branch:** `main` (entegrasyon)
+**Öncelik:** Orta · **Görev 1–3 merge edildikten sonra yapılır**
+
+- [ ] Uçtan uca test: Upload → Filter → Transform → Quantize → Compress → Output.
+- [ ] Şunları doğrula:
+  1. DWT seçiliyken Quantization'da DCT görünmüyor.
+  2. JPEG2000 sonucu yanlışlıkla JPEG sekmesi altında değil.
+  3. Filtre sayısı arttı (haar, db2, db3, db4, db6, db8).
+  4. Alt-bant bölünmesi yalnızca varyans yüksekken oluyor.
+  5. Proje runtime hatasız çalışıyor (console error/warning yok).
+- [ ] Yanlış bölümde görünen / yanlış çalışan her yeri raporla; sahibine geri ata.
+- [ ] 1–3 PR'larını incele ve `main`'e merge et; tüm `feature/...` branch'lerini `main`'e güncel tut.
+
+**Koordinasyon:** Görev 1 alt-bant çıktısının şeklini değiştiriyor → Fatmanur düzeltmesini Berfin ve Azra'dan **önce** merge etmek mantıklı.
 
 ---
 
@@ -61,12 +157,12 @@
 ## 2 · Gül Deniz Özdemir — Upload + Preprocessing
 
 **Branch:** `feature/upload-guldeniz`  
-**Dosyalar:** `UploadPage.tsx` · **`PreprocessingPage.tsx`** *(yeni — sahibi sensin)*
+**Dosyalar:** `UploadPage.tsx` · `PreprocessingPage.tsx`
 
 ### Iter-2 görevleri
 - [x] **Upload — Image type seçici**: "AI Generated" tipi eklendi (`src/app/pages/UploadPage.tsx`)
 - [ ] **Upload — Type profile preview**: Tip seçilince altında "Bu tip için Spectra'nın trained preset'i" mini özet kartı (mavi/cyan badge ile) göster — `getProfile()` çağırıp method/wavelet/step özetle
-- [ ] **Preprocessing sayfası — sahiplen**: `src/app/pages/PreprocessingPage.tsx`
+- [ ] **Preprocessing sayfası**: `src/app/pages/PreprocessingPage.tsx`
   - Mevcut: yalnızca color-space seçici (YCbCr / RGB / Luma)
   - Eklenecek: profil önerisi banner'ı (`TypePresetBanner` zaten yok, sen ekle çağrısı: `<TypePresetBanner stage="..." onApply={...} />`)
   - Eklenecek: Sağdaki kanal görselleştirmesinin altında **histogram mini chart** (mock veri yeterli) — luma dağılımının nasıl değiştiğini göster
@@ -139,14 +235,14 @@
 ## 4 · Ayşe Berfin Özçelik — Quantization + Entropy
 
 **Branch:** `feature/quantization-berfin`  
-**Dosyalar:** `QuantizationPage.tsx` · **`EntropyPage.tsx`** *(yeni — sahibi sensin)*
+**Dosyalar:** `QuantizationPage.tsx` · `EntropyPage.tsx`
 
 ### Iter-2 görevleri
 - [x] **CR formülü güncellendi**: `estimateMetrics` → `baseCR = 16 + (s/64)^0.85 × 64` → minimum 16, max ~80
 - [x] **PSNR floor**: 16 dB'ye düştü (eskiden 20 dB) — yüksek Δ'da net bozulma
 - [ ] **Quantization — quality scale gradient**: Görselin sağ panelinde renk skalası (yeşil → klein → amber → rust) — handle pozisyonu sayısal değerle (Δ=18) iliştirilsin (ipucu: zaten var ama daha okunaklı yap)
 - [ ] **Quantization — kart üzerinde matrix preview**: 8×8 örnek DCT matrisinin Δ=stepSize ile bölünüp yuvarlanmış halini canlı göster (DCTBlockPanel'i quantized=true prop'uyla yeniden kullanabilirsin — Fatmanur'la koordine et)
-- [ ] **Entropy sayfası — sahiplen**: `src/app/pages/EntropyPage.tsx`
+- [ ] **Entropy sayfası**: `src/app/pages/EntropyPage.tsx`
   - Mevcut: coder seçici (Default Huffman, Custom Huffman, Arithmetic) + canlı bpp / CR önizleme + sembol frekans bar chart
   - Eklenecek: Bar chart üzerine seçili coder'a göre **renk değişikliği** (Default → klein, Custom → leaf, Arithmetic → plum)
   - Eklenecek: `TypePresetBanner stage="entropy"` çağrısı — coder otomatik öneri
@@ -272,23 +368,6 @@
 
 ---
 
-## 7 · Yeni özellik — "Training Lab" (opsiyonel, ekibe açık)
-
-**Sahibi:** Henüz atanmamış · Ezgi'ye sor
-
-Hocanın "image type'larla training" isteğine **görsel karşılık** olacak yeni mini sayfa fikri:
-
-`/training` (yeni route)
-- 5 image type kartı (Natural, AI Gen, Synthetic, Fingerprint, Biomedical)
-- Her kart üzerinde: tipin "trained" preset'i + örnek metric (CR/PSNR/Sparsity)
-- Her kart "Run benchmark" butonu → Process pipeline'ını o preset ile çalıştır → tablo dolar
-- Hoca'ya tek bakışta "biz tüm bu tiplerle test ettik" görüntüsü verir
-- Beklenen efor: 4-6 saat
-
-İlgilenen varsa Ezgi'ye söylesin — yeni branch açılır: `feature/training-<owner>`.
-
----
-
 ## Profile referansı (lib/imageTypeProfiles.ts)
 
 | Type | Method | Wavelet | Level | Δ | Lossless | Coder | CR bonus | Accent |
@@ -305,10 +384,10 @@ Hocanın "image type'larla training" isteğine **görsel karşılık** olacak ye
 
 ```
 /upload         → feature/upload-guldeniz   → Gül Deniz
-/preprocessing  → feature/upload-guldeniz   → Gül Deniz   (yeni)
+/preprocessing  → feature/upload-guldeniz   → Gül Deniz
 /transform      → feature/transform-fatmanur → Fatmanur
 /quantization   → feature/quantization-berfin → Berfin
-/entropy        → feature/quantization-berfin → Berfin    (yeni)
+/entropy        → feature/quantization-berfin → Berfin
 /processing     → feature/processing-melike → Melike
 /results        → feature/results-azra      → Azra
 /history        → feature/results-azra      → Azra
