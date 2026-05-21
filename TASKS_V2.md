@@ -16,6 +16,102 @@
 
 ---
 
+## Iter-4 · Hata düzeltme turu (filtre · quantization · compression)
+
+> **Durum: AÇIK — sahiplerine atandı, henüz düzeltilmedi.**
+> Ekipten ve denemelerden gelen 4 hata. Her sahip kendi `feature/...` branch'inde
+> çalışır → PR açar → Ezgi `main`'e merge eder. Branch'ler `main`'den güncel
+> alınmalı (`git pull --rebase origin <branch>`).
+
+### Özet tablo
+
+| # | Görev alanı | Problem | Yapılacak düzeltme | Atanan kişi | Öncelik |
+|---|---|---|---|---|---|
+| 1 | Transform filtreleri & DWT alt-bant mantığı | Filtre listesi kısa; bölme mantığı yanlış (tüm alt-bantlar bölünüyor) | Filtre ekle + varyans-tabanlı bölme | **Fatmanur Durak** | Yüksek |
+| 2 | Quantization'da DWT/DCT karışması | DWT seçiliyken DCT paneli de görünüyor | Metoda göre panel ayır | **Ayşe Berfin Özçelik** | Orta |
+| 3 | Compression: JPEG/JPEG2000 ayrımı | JPEG2000 sonucu JPEG sekmesi altında açılıyor | Sekme/metot ayrımını düzelt | **Azra Erbaş** | Yüksek |
+| 4 | Tam akış hata ayıklama / test | Akışta başka hatalar olabilir | Uçtan uca test | **Ezginur Kalfaoğlu** (PM) | Orta |
+
+---
+
+### Görev 1 — Fatmanur Durak · Transform filtreleri & DWT alt-bant mantığı
+
+**Branch:** `feature/transform-fatmanur`
+**Dosyalar:** `src/app/lib/dwt.ts` · `src/app/components/DWTSubbandsViz.tsx` · `src/app/pages/TransformPage.tsx`
+**Öncelik:** Yüksek
+
+- [ ] **Filtre listesini genişlet** — şu an sadece `haar, db2, db4` var. En az `db3, db6, db8` ekle.
+  - `dwt.ts` → `Filter` tipine yeni isimleri ekle + `FILTERS` tablosuna alçak-geçiren (lo) katsayılarını gir (hi otomatik QMF ile üretiliyor).
+  - `TransformPage.tsx` → `WAVELET_INFO` sözlüğüne ve wavelet `sp-pill` butonlarına yeni filtreleri ekle.
+- [ ] **Bölme mantığını düzelt — varyans tabanlı uyarlamalı bölme.**
+  - Mevcut durum: `waveletPacket2D` her alt-bandı maxLevel'e kadar **koşulsuz** bölüyor (tam wavelet-packet).
+  - İstenen: bir alt-bant **yalnızca varyansı yüksekse** bölünsün.
+    - Alt-bandın katsayı varyansını hesapla.
+    - Varyans eşiği aşıyorsa → 4'e böl (LL/HL/LH/HH) ve devam et.
+    - Düşükse → o alt-bandı **yaprak** bırak, gereksiz bölme.
+  - Sonuç: düz görüntü → az bölme (≈ klasik piramit), detaylı görüntü → çok bölme.
+- [ ] **LL/LH/HL/HH yerleşimini doğrula** — her bölme adımında 4 alt-bant doğru konuma yazılıyor mu.
+- [ ] **`DWTSubbandsViz` uyarlamalı çizime geçsin** — artık sabit `2^level × 2^level` grid değil; yapraklar farklı boyutta (derinliği az olan yaprak daha büyük hücre). Hücre `span`'ı = `2^(maxLevel − depth)`.
+- [ ] **Aşağı-akış uyumu** — alt-bant çıktısının şekli değişiyor (sabit `4^level` yerine değişken yaprak listesi). `pipeline.ts`/`computeMetrics` zaten `b.size` ile alan-ağırlıklı topluyor; yine de Berfin ve Azra'ya haber ver.
+
+**Test:** `npx vite build` hatasız; Transform'da J2K + farklı filtreler seçilince viz değişiyor; düz vs detaylı görüntüde bölme sayısı farklı.
+
+---
+
+### Görev 2 — Ayşe Berfin Özçelik · Quantization DWT/DCT ayrımı
+
+**Branch:** `feature/quantization-berfin`
+**Dosya:** `src/app/pages/QuantizationPage.tsx`
+**Öncelik:** Orta
+
+- [ ] **Bug:** Quantize ekranında "QUANTIZATION EFFECT · LIVE" kartı her zaman `DCTBlockPanel` (8×8 DCT bloğu) gösteriyor — transform DWT (jpeg2000) seçiliyken bile.
+- [ ] **Düzeltme:** kartı `transform.method`'a göre koşullu render et:
+  - `method === 'jpeg'` (DCT) → mevcut `DCTBlockPanel` kalsın.
+  - `method === 'jpeg2000'` (DWT) → DCT bloğu yerine **DWT alt-bant quantization önizlemesi** göster (örn. `DWTSubbandsViz`'i `transform.subbandStats` ile besle).
+- [ ] Kart başlığı da metoda göre değişsin ("DCT BLOCK QUANTIZATION" / "DWT SUBBAND QUANTIZATION").
+- [ ] Quantization Type segmenti (Uniform/Scalar) ve diğer seçenekler **yalnızca seçili transform ile alakalı** olanları göstersin — alakasız seçenek kalmasın.
+- [ ] `localStorage["spectra_transform"]` zaten okunuyor; `method` alanına göre dallandır.
+
+**Test:** Transform'da DWT seç → Quantize'da DCT bloğu görünmemeli. DCT seç → DCT bloğu görünmeli.
+
+---
+
+### Görev 3 — Azra Erbaş · Compression JPEG/JPEG2000 ayrımı
+
+**Branch:** `feature/results-azra`
+**Dosya:** `src/app/pages/ResultsPage.tsx`
+**Öncelik:** Yüksek
+
+- [ ] **Bug:** Sonuç ekranında `activeTab` varsayılanı sabit `'jpeg2000'`. Kullanıcı JPEG çalıştırdıysa sayfa yine JPEG2000 sekmesinde açılıyor; JPEG2000 çalıştırıldığında ise sonuç yanlış sekme altında görünebiliyor.
+- [ ] **Düzeltme:**
+  - `activeTab` başlangıç değeri **çalıştırılan metoda göre** (`ranTab`) belirlensin — JPEG çalıştıysa JPEG sekmesi, JPEG2000 çalıştıysa JPEG2000 sekmesi açık gelsin.
+  - Çalıştırılmayan metot sekmesi açıkça **"tahmini / çalıştırılmadı"** rozetiyle işaretlensin (türetilmiş `otherResult` gerçek sonuç sanılmasın).
+  - JPEG ve JPEG2000 net ayrılsın; her sekme yalnızca kendi metodunu temsil etsin.
+- [ ] JPEG2000 desteklenmiyorsa devre dışı bırak + açıklayıcı mesaj; destekleniyorsa kendi sekmesi/sonucu net olsun.
+
+**Test:** JPEG2000 çalıştır → Results JPEG2000 sekmesinde açılır, gerçek sonuç orada. JPEG sekmesi "tahmini" etiketli.
+
+---
+
+### Görev 4 — Ezginur Kalfaoğlu (PM) · Tam akış hata ayıklama & test
+
+**Branch:** `main` (entegrasyon)
+**Öncelik:** Orta · **Görev 1–3 merge edildikten sonra yapılır**
+
+- [ ] Uçtan uca test: Upload → Filter → Transform → Quantize → Compress → Output.
+- [ ] Şunları doğrula:
+  1. DWT seçiliyken Quantization'da DCT görünmüyor.
+  2. JPEG2000 sonucu yanlışlıkla JPEG sekmesi altında değil.
+  3. Filtre sayısı arttı (haar, db2, db3, db4, db6, db8).
+  4. Alt-bant bölünmesi yalnızca varyans yüksekken oluyor.
+  5. Proje runtime hatasız çalışıyor (console error/warning yok).
+- [ ] Yanlış bölümde görünen / yanlış çalışan her yeri raporla; sahibine geri ata.
+- [ ] 1–3 PR'larını incele ve `main`'e merge et; tüm `feature/...` branch'lerini `main`'e güncel tut.
+
+**Koordinasyon:** Görev 1 alt-bant çıktısının şeklini değiştiriyor → Fatmanur düzeltmesini Berfin ve Azra'dan **önce** merge etmek mantıklı.
+
+---
+
 ## 0 · Kurallar (sürüm-1'den hatırlatma)
 
 | Kural | Açıklama |
