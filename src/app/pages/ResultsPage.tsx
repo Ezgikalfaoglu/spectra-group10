@@ -25,6 +25,7 @@ const DEMO_RESULT = {
   imageDataUrl: DEMO_IMAGE,
   settings: { method: 'jpeg2000', waveletFilter: 'db4', decompositionLevel: 3, quantizationType: 'scalar', stepSize: 18 },
 };
+const JPEG_DEMO = { ...DEMO_RESULT, method: 'JPEG', wavelet: '—', decompLevel: '—', mse: 78.4, psnr: 29.2, cr: '8.9:1', sparsity: '62%' };
 // PSNR: max(14, 38 - s*0.9); JPEG2000 ≈ JPEG + 2.6 dB
 // CR:   16 + (s/64)^0.85 * 64 for JPEG2000; JPEG ≈ ×0.85
 const CHART_DATA = [
@@ -91,6 +92,15 @@ export function ResultsPage() {
   URL.revokeObjectURL(url);
 };
 
+  const handleDownloadCompressed = () => {
+    if (!currentResult.imageDataUrl) return;
+    
+    const a = document.createElement('a');
+    a.href = currentResult.imageDataUrl;
+    a.download = `${currentResult.imageName?.replace(/\.[^/.]+$/, '') || 'compressed'}-${currentResult.method || 'compressed'}.png`;
+    a.click();
+  };
+
   useEffect(() => {
     const stored = localStorage.getItem('lastResult');
     if (stored) { 
@@ -110,8 +120,15 @@ export function ResultsPage() {
 
   const result = lastResult || DEMO_RESULT;
   const isDemo = !lastResult;
-  const currentResult = activeTab === 'jpeg' ? JPEG_DEMO : result;
-  const baselineResult = activeTab === 'jpeg2000' ? JPEG_DEMO : result;
+  
+  // İlk yükleme yapılırken activeTab null olabilir, bu durumda demo'da ve gerçek sonuçlarda jpeg2000 default seç
+  const effectiveActiveTab = activeTab ?? 'jpeg2000';
+  
+  // Çalıştırılan algoritmanın method'unu belirle
+  const runMethod = result.method?.toLowerCase() ?? 'jpeg2000';
+  
+  const currentResult = effectiveActiveTab === 'jpeg' ? JPEG_DEMO : result;
+  const baselineResult = effectiveActiveTab === 'jpeg2000' ? JPEG_DEMO : result;
   const imgSrc = currentResult.imageDataUrl || DEMO_IMAGE;
   const stepSize = currentResult.stepSize ?? 18;
 
@@ -243,7 +260,7 @@ export function ResultsPage() {
             quantizationType: currentResult.quantType,
           }}
           compareMethod={
-            activeTab === 'jpeg'
+            effectiveActiveTab === 'jpeg'
               ? { method: 'JPEG2000', mse: DEMO_RESULT.mse, psnr: DEMO_RESULT.psnr }
               : { method: 'JPEG', mse: JPEG_DEMO.mse, psnr: JPEG_DEMO.psnr }
           }
