@@ -80,8 +80,8 @@ function distortionFromSubbands(subbands: SubbandStat[], s: number): Distortion 
 // wavelet-packet subbands, JPEG (DCT) uses an 8×8 block-transform model.
 export function computeMetrics(input: PipelineInput): PipelineMetrics {
   if (input.lossless) {
-    const crL = Math.max(2.0, 2.4 * typeBonus(input.imageType)) * coderGain(input.coder);
-    return { mse: 0, psnr: PSNR_CEIL, cr: +crL.toFixed(1), crLabel: `${crL.toFixed(1)}:1`, sparsity: 0 };
+    const crL = 2.4;
+    return { mse: 0, psnr: PSNR_CEIL, cr: crL, crLabel: `${crL.toFixed(1)}:1`, sparsity: 0 };
   }
 
   const s = input.stepSize;
