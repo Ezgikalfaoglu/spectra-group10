@@ -126,9 +126,35 @@ export function ResultsPage() {
   
   // Çalıştırılan algoritmanın method'unu belirle
   const runMethod = result.method?.toLowerCase() ?? 'jpeg2000';
-  
-  const currentResult = effectiveActiveTab === 'jpeg' ? JPEG_DEMO : result;
-  const baselineResult = effectiveActiveTab === 'jpeg2000' ? JPEG_DEMO : result;
+  const ranIsJ2K = runMethod === 'jpeg2000';
+  const ranTab: TabType = ranIsJ2K ? 'jpeg2000' : 'jpeg';
+
+  // Derive the *other* method's metrics from the actual run, so the non-run tab
+  // shows a sensible estimate instead of a hardcoded demo value.
+  // (JPEG2000 typically ~2.6 dB PSNR / ~18% better CR / ~12% higher sparsity than JPEG.)
+  const otherResult = (() => {
+    const psnr = +(ranIsJ2K
+      ? Math.max(14, result.psnr - 2.6)
+      : Math.min(50, result.psnr + 2.6)).toFixed(2);
+    const mse = +(ranIsJ2K ? result.mse * 1.85 : result.mse / 1.85).toFixed(2);
+    const crNum = parseFloat(result.cr);
+    const newCR = ranIsJ2K ? crNum * 0.85 : crNum * 1.18;
+    const sp = parseInt(result.sparsity);
+    const newSp = Math.max(40, Math.min(95, ranIsJ2K ? sp - 12 : sp + 12));
+    return {
+      ...result,
+      method: ranIsJ2K ? 'JPEG' : 'JPEG2000',
+      wavelet: ranIsJ2K ? '—' : (result.wavelet && result.wavelet !== '—' ? result.wavelet : 'db4'),
+      decompLevel: ranIsJ2K ? '—' : (typeof result.decompLevel === 'number' ? result.decompLevel : 3),
+      psnr,
+      mse,
+      cr: `${newCR.toFixed(1)}:1`,
+      sparsity: `${newSp}%`,
+    };
+  })();
+
+  const currentResult = effectiveActiveTab === ranTab ? result : otherResult;
+  const baselineResult = effectiveActiveTab === ranTab ? otherResult : result;
   const imgSrc = currentResult.imageDataUrl || DEMO_IMAGE;
   const stepSize = currentResult.stepSize ?? 18;
 
