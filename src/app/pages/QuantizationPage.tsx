@@ -132,6 +132,7 @@ export function QuantizationPage() {
     if (!transform?.subbandStats || transform.subbandStats.length === 0) return undefined;
     return transform.subbandStats.map((s) => ({
       chain: s.chain,
+      depth: s.chain.length / 2,
       value: Math.round(s.meanSigned / effectiveStep) * effectiveStep,
     }));
   }, [transform?.subbandStats, effectiveStep]);
