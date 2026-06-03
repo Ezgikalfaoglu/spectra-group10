@@ -12,7 +12,7 @@
  * ─────────────────────────────────────────────────────────
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
 import {
@@ -24,6 +24,7 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/app/compo
 import { PipelineStepper } from '../components/PipelineStepper';
 import { TypePresetBanner } from '../components/TypePresetBanner';
 import { DCTBlockPanel } from '../components/DCTBlockPanel';
+import { DWTSubbandsViz } from '../components/DWTSubbandsViz';
 import { computeMetrics } from '../lib/pipeline';
 import type { SubbandStat } from '../lib/dwt';
 
@@ -45,6 +46,15 @@ const DEFAULT_TRANSFORM: StoredTransform = {
   waveletFilter: 'db4',
   decompositionLevel: 2,
 };
+
+function normalizeQuantizationType(
+  method: StoredTransform['method'] | undefined,
+  value: QuantizationSettings['quantizationType'],
+): QuantizationSettings['quantizationType'] {
+  // In the JPEG2000 path, we expose only scalar subband quantization controls.
+  if (method === 'jpeg2000') return 'scalar';
+  return value;
+}
 
 export function QuantizationPage() {
   const navigate = useNavigate();
@@ -100,6 +110,12 @@ export function QuantizationPage() {
   const update = <K extends keyof QuantizationSettings>(key: K, value: QuantizationSettings[K]) =>
     setSettings(s => ({ ...s, [key]: value }));
 
+  useEffect(() => {
+    if (transform?.method === 'jpeg2000' && settings.quantizationType !== 'scalar') {
+      setSettings(s => ({ ...s, quantizationType: 'scalar' }));
+    }
+  }, [transform?.method, settings.quantizationType]);
+
   const handleNext = () => {
     const payload = {
       ...settings,
@@ -110,6 +126,15 @@ export function QuantizationPage() {
   };
 
   const effectiveStep = settings.lossless ? 1 : settings.stepSize;
+  const isDwtTransform = (transform?.method ?? DEFAULT_TRANSFORM.method) === 'jpeg2000';
+  const quantizationEffectTitle = isDwtTransform ? 'DWT SUBBAND QUANTIZATION' : 'DCT BLOCK QUANTIZATION';
+  const quantizedSubbandCoefs = useMemo(() => {
+    if (!transform?.subbandStats || transform.subbandStats.length === 0) return undefined;
+    return transform.subbandStats.map((s) => ({
+      chain: s.chain,
+      value: Math.round(s.meanSigned / effectiveStep) * effectiveStep,
+    }));
+  }, [transform?.subbandStats, effectiveStep]);
 
   // Live preview — same model as Entropy/Processing (coder defaults to the
   // pipeline baseline since the entropy stage hasn't been visited yet).
@@ -178,7 +203,7 @@ export function QuantizationPage() {
         stage="quantize"
         onApply={(p) => setSettings(s => ({
           ...s,
-          quantizationType: p.quantizationType,
+          quantizationType: normalizeQuantizationType(transform?.method, p.quantizationType),
           stepSize: p.stepSize,
           lossless: p.forceLossless || s.lossless,
         }))}
@@ -265,20 +290,31 @@ export function QuantizationPage() {
                       <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.2em', color: 'var(--ink-3)', textTransform: 'uppercase', marginBottom: 10 }}>
                         Quantization Type
                       </label>
-                      <div className="sp-seg">
-                        {(['uniform', 'scalar'] as const).map(q => (
-                          <button
-                            key={q}
-                            type="button"
-                            onClick={() => update('quantizationType', q)}
-                            className={`sp-seg-btn ${settings.quantizationType === q ? 'sp-seg-btn-active' : ''}`}
-                            disabled={controlsDisabled}
-                            style={{ cursor: controlsDisabled ? 'not-allowed' : 'pointer' }}
-                          >
-                            {q === 'uniform' ? 'Uniform' : 'Scalar'}
-                          </button>
-                        ))}
-                      </div>
+                      {isDwtTransform ? (
+                        <div style={{ padding: '12px 14px', border: '1px solid var(--rule)', borderRadius: 'var(--r-md)', background: 'var(--paper-2)' }}>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--ink)', letterSpacing: '0.06em' }}>
+                            Scalar (subband)
+                          </div>
+                          <div style={{ marginTop: 4, fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--ink-4)', letterSpacing: '0.04em', lineHeight: 1.5 }}>
+                            JPEG2000 uses wavelet-subband quantization; block-only choices are hidden in this mode.
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="sp-seg">
+                          {(['uniform', 'scalar'] as const).map(q => (
+                            <button
+                              key={q}
+                              type="button"
+                              onClick={() => update('quantizationType', q)}
+                              className={`sp-seg-btn ${settings.quantizationType === q ? 'sp-seg-btn-active' : ''}`}
+                              disabled={controlsDisabled}
+                              style={{ cursor: controlsDisabled ? 'not-allowed' : 'pointer' }}
+                            >
+                              {q === 'uniform' ? 'Uniform' : 'Scalar'}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     {/* Step size slider */}
@@ -478,10 +514,20 @@ export function QuantizationPage() {
           <div className="sp-card" style={{ overflow: 'hidden' }}>
             <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--rule)' }}>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.22em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>
-                QUANTIZATION EFFECT · LIVE
+                {quantizationEffectTitle}
               </span>
             </div>
-            <DCTBlockPanel delta={effectiveStep} />
+            {isDwtTransform ? (
+              <div style={{ padding: 18 }}>
+                <DWTSubbandsViz
+                  level={transform?.decompositionLevel ?? 2}
+                  active
+                  coefficients={quantizedSubbandCoefs}
+                />
+              </div>
+            ) : (
+              <DCTBlockPanel delta={effectiveStep} />
+            )}
           </div>
 
           {/* Pipeline summary */}

@@ -25,6 +25,7 @@ const DEMO_RESULT = {
   imageDataUrl: DEMO_IMAGE,
   settings: { method: 'jpeg2000', waveletFilter: 'db4', decompositionLevel: 3, quantizationType: 'scalar', stepSize: 18 },
 };
+const JPEG_DEMO = { ...DEMO_RESULT, method: 'JPEG', wavelet: '—', decompLevel: '—', mse: 78.4, psnr: 29.2, cr: '8.9:1', sparsity: '62%' };
 // PSNR: max(14, 38 - s*0.9); JPEG2000 ≈ JPEG + 2.6 dB
 // CR:   16 + (s/64)^0.85 * 64 for JPEG2000; JPEG ≈ ×0.85
 const CHART_DATA = [
@@ -71,108 +72,63 @@ const ttStyle = {
 };
 
 export function ResultsPage() {
-  const [activeTab, setActiveTab] = useState<TabType>('jpeg2000');
   const [lastResult, setLastResult] = useState<typeof DEMO_RESULT | null>(null);
   const [compareMode, setCompareMode] = useState<ComparisonMode>('split');
+  const [activeTab, setActiveTab] = useState<TabType | null>(null);
+
   const handleDownloadJSON = () => {
-    const blob = new Blob(
-      [JSON.stringify(currentResult, null, 2)],
-      { type: 'application/json' }
-    );
-    const url = URL.createObjectURL(blob);
+  const blob = new Blob(
+    [JSON.stringify(currentResult, null, 2)],
+    { type: 'application/json' }
+  );
+
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'spectra-result.json';
+  a.click();
+
+  URL.revokeObjectURL(url);
+};
+
+  const handleDownloadCompressed = () => {
+    if (!currentResult.imageDataUrl) return;
+    
     const a = document.createElement('a');
-    a.href = url;
-    a.download = 'spectra-result.json';
+    a.href = currentResult.imageDataUrl;
+    a.download = `${currentResult.imageName?.replace(/\.[^/.]+$/, '') || 'compressed'}-${currentResult.method || 'compressed'}.png`;
     a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // Re-encode the source image at a quality derived from the current step size
-  // — emulates the size reduction the pipeline reports.
-  const handleDownloadCompressed = async () => {
-    const src = currentResult.imageDataUrl || DEMO_IMAGE;
-    const isJ2K = (currentResult.method || '').toLowerCase().includes('2000');
-    const step = currentResult.stepSize ?? 18;
-
-    // step ∈ [1..40] → quality ∈ [0.95 .. 0.10]; J2K ~5% better at same step
-    const baseQ = Math.max(0.10, Math.min(0.95, 1 - (step / 44)));
-    const quality = isJ2K ? Math.min(0.95, baseQ + 0.05) : baseQ;
-
-    const img = new Image();
-    // Only set crossOrigin for http(s) sources — data URLs are same-origin already
-    if (src.startsWith('http://') || src.startsWith('https://')) {
-      img.crossOrigin = 'anonymous';
-    }
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth || 1024;
-      canvas.height = img.naturalHeight || 1024;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      try {
-        canvas.toBlob((blob) => {
-          if (!blob) return;
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          const baseName = (currentResult.imageName || 'specimen').replace(/\.[^.]+$/, '');
-          const labelMethod = isJ2K ? 'jpeg2000' : 'jpeg';
-          // Sanitise CR (replace ":" → "x" for cross-platform filename safety)
-          const safeCR = String(currentResult.cr).replace(/[:/\\?*"<>|]/g, 'x');
-          a.href = url;
-          a.download = `${baseName}_${labelMethod}_q${Math.round(quality * 100)}_cr${safeCR}.jpg`;
-          a.click();
-          URL.revokeObjectURL(url);
-        }, 'image/jpeg', quality);
-      } catch (err) {
-        // Tainted canvas (CORS-cross origin without proper headers) — bail out
-        console.error('Cannot export image — canvas is tainted', err);
-        alert('Cannot re-encode this image due to cross-origin restrictions. Upload a local file and try again.');
-      }
-    };
-    img.onerror = () => {
-      alert('Failed to load source image for re-encoding.');
-    };
-    img.src = src;
   };
 
   useEffect(() => {
     const stored = localStorage.getItem('lastResult');
-    if (stored) { try { setLastResult(JSON.parse(stored)); } catch {} }
+    if (stored) { 
+      try { 
+        const parsed = JSON.parse(stored);
+        setLastResult(parsed);
+        // Çalıştırılan algoritma ne ise ona göre aktif tab'ı belirle
+        const runMethod = parsed.method?.toLowerCase();
+        if (runMethod === 'jpeg') {
+          setActiveTab('jpeg');
+        } else if (runMethod === 'jpeg2000') {
+          setActiveTab('jpeg2000');
+        }
+      } catch {} 
+    }
   }, []);
 
   const result = lastResult || DEMO_RESULT;
   const isDemo = !lastResult;
-
-  // The user actually ran one method. Derive the *other* method's metrics from
-  // the same upload so both tabs are filled with sensible, comparable numbers
-  // (JPEG2000 is typically ~2.6 dB PSNR higher and ~18% better CR than JPEG).
-  const ranIsJ2K = (result.method || '').toUpperCase().includes('2000');
-  const ranTab: TabType = ranIsJ2K ? 'jpeg2000' : 'jpeg';
-
-  const otherResult = (() => {
-    const psnr = +(ranIsJ2K
-      ? Math.max(14, result.psnr - 2.6)
-      : Math.min(50, result.psnr + 2.6)).toFixed(2);
-    const mse = +(ranIsJ2K ? result.mse * 1.85 : result.mse / 1.85).toFixed(2);
-    const crNum = parseFloat(result.cr);
-    const newCR = ranIsJ2K ? crNum * 0.85 : crNum * 1.18;
-    const sp = parseInt(result.sparsity);
-    const newSp = Math.max(40, Math.min(95, ranIsJ2K ? sp - 12 : sp + 12));
-    return {
-      ...result,
-      method: ranIsJ2K ? 'JPEG' : 'JPEG2000',
-      wavelet: ranIsJ2K ? '—' : (result.wavelet && result.wavelet !== '—' ? result.wavelet : 'db4'),
-      decompLevel: ranIsJ2K ? '—' : (typeof result.decompLevel === 'number' ? result.decompLevel : 3),
-      psnr,
-      mse,
-      cr: `${newCR.toFixed(1)}:1`,
-      sparsity: `${newSp}%`,
-    };
-  })();
-
-  const currentResult = activeTab === ranTab ? result : otherResult;
-  const baselineResult = activeTab === ranTab ? otherResult : result;
+  
+  // İlk yükleme yapılırken activeTab null olabilir, bu durumda demo'da ve gerçek sonuçlarda jpeg2000 default seç
+  const effectiveActiveTab = activeTab ?? 'jpeg2000';
+  
+  // Çalıştırılan algoritmanın method'unu belirle
+  const runMethod = result.method?.toLowerCase() ?? 'jpeg2000';
+  
+  const currentResult = effectiveActiveTab === 'jpeg' ? JPEG_DEMO : result;
+  const baselineResult = effectiveActiveTab === 'jpeg2000' ? JPEG_DEMO : result;
   const imgSrc = currentResult.imageDataUrl || DEMO_IMAGE;
   const stepSize = currentResult.stepSize ?? 18;
 
@@ -196,7 +152,7 @@ export function ResultsPage() {
         <span>{arrow}</span>
         <span>{Math.abs(delta).toFixed(1)}%</span>
         <span style={{ color: 'var(--ink-4)' }}>
-          vs {activeTab === 'jpeg2000' ? 'JPEG' : 'JPEG2000'}
+          vs {effectiveActiveTab === 'jpeg2000' ? 'JPEG' : 'JPEG2000'}
         </span>
       </div>
     );
@@ -303,7 +259,11 @@ export function ResultsPage() {
             stepSize: currentResult.stepSize,
             quantizationType: currentResult.quantType,
           }}
-          compareMethod={{ method: otherResult.method, mse: otherResult.mse, psnr: otherResult.psnr }}
+          compareMethod={
+            effectiveActiveTab === 'jpeg'
+              ? { method: 'JPEG2000', mse: DEMO_RESULT.mse, psnr: DEMO_RESULT.psnr }
+              : { method: 'JPEG', mse: JPEG_DEMO.mse, psnr: JPEG_DEMO.psnr }
+          }
         />
       </div>
 
@@ -313,24 +273,77 @@ export function ResultsPage() {
           { key: 'jpeg2000', label: 'JPEG2000' },
           { key: 'jpeg',     label: 'JPEG' },
           { key: 'comparison', label: 'Charts' },
-        ] as { key: TabType; label: string }[]).map(tab => (
-          <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-            style={{ padding: '8px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 10.5, letterSpacing: '0.1em', textTransform: 'uppercase', transition: 'all 0.2s', background: activeTab === tab.key ? 'var(--ink)' : 'transparent', color: activeTab === tab.key ? 'var(--paper)' : 'var(--ink-3)', boxShadow: activeTab === tab.key ? '0 2px 8px -2px rgba(10,11,14,0.3)' : 'none' }}>
-            {tab.label}
-          </button>
-        ))}
+        ] as { key: TabType; label: string }[]).map(tab => {
+          // Çalıştırılmayan algoritmayı işaretle
+          const isUnexecuted = 
+            !isDemo && 
+            tab.key !== 'comparison' && 
+            ((tab.key === 'jpeg' && runMethod !== 'jpeg') || 
+             (tab.key === 'jpeg2000' && runMethod !== 'jpeg2000'));
+          
+          return (
+            <button 
+              key={tab.key} 
+              onClick={() => setActiveTab(tab.key)}
+              title={isUnexecuted ? 'Tahmini / Çalıştırılmadı' : ''}
+              style={{ 
+                padding: '8px 18px', 
+                borderRadius: 8, 
+                border: 'none', 
+                cursor: 'pointer', 
+                fontFamily: 'var(--font-mono)', 
+                fontSize: 10.5, 
+                letterSpacing: '0.1em', 
+                textTransform: 'uppercase', 
+                transition: 'all 0.2s', 
+                background: effectiveActiveTab === tab.key ? 'var(--ink)' : 'transparent', 
+                color: effectiveActiveTab === tab.key ? 'var(--paper)' : 'var(--ink-3)', 
+                boxShadow: effectiveActiveTab === tab.key ? '0 2px 8px -2px rgba(10,11,14,0.3)' : 'none',
+                opacity: isUnexecuted ? 0.5 : 1,
+                position: 'relative'
+              }}>
+              {tab.label}
+              {isUnexecuted && (
+                <span style={{ 
+                  marginLeft: 6, 
+                  fontSize: '8px', 
+                  opacity: 0.8,
+                  fontWeight: 600,
+                  display: 'inline-block',
+                  padding: '2px 6px',
+                  background: 'rgba(10,11,14,0.1)',
+                  borderRadius: 3
+                }}>
+                  EST.
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Results tab content */}
-      {activeTab !== 'comparison' && (
-        <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} className="sp-card" style={{ overflow: 'hidden' }}>
+      {effectiveActiveTab !== 'comparison' && (
+        <motion.div key={effectiveActiveTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} className="sp-card" style={{ overflow: 'hidden' }}>
+          {/* Çalıştırılmayan algoritma uyarısı */}
+          {!isDemo && 
+            ((effectiveActiveTab === 'jpeg' && runMethod !== 'jpeg') || 
+             (effectiveActiveTab === 'jpeg2000' && runMethod !== 'jpeg2000')) && (
+            <div style={{ background: 'rgba(224,168,80,0.08)', border: '1px solid rgba(224,168,80,0.3)', borderRadius: 'var(--r-md)', padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 12, margin: '14px 20px 0 20px', marginBottom: '14px' }}>
+              <AlertCircle style={{ width: 16, height: 16, color: 'var(--amber)', flexShrink: 0 }} />
+              <p style={{ fontSize: 13.5, color: 'var(--ink-2)', margin: 0 }}>
+                Bu sekme tahmini sonuçları göstermektedir. Gerçek sonuçlar {runMethod === 'jpeg' ? 'JPEG' : 'JPEG2000'} sekmesindedir.
+              </p>
+            </div>
+          )}
+          
           {/* Tab header */}
           <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--rule)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--paper-3)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ padding: '3px 12px', borderRadius: 100, fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', background: activeTab === 'jpeg2000' ? 'rgba(30,42,255,0.08)' : 'rgba(75,30,122,0.08)', color: activeTab === 'jpeg2000' ? 'var(--klein)' : 'var(--plum)', border: `1px solid ${activeTab === 'jpeg2000' ? 'rgba(30,42,255,0.2)' : 'rgba(75,30,122,0.2)'}` }}>
-                {activeTab === 'jpeg2000' ? 'JPEG2000 (DWT)' : 'JPEG (DCT)'}
+              <span style={{ padding: '3px 12px', borderRadius: 100, fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', background: effectiveActiveTab === 'jpeg2000' ? 'rgba(30,42,255,0.08)' : 'rgba(75,30,122,0.08)', color: effectiveActiveTab === 'jpeg2000' ? 'var(--klein)' : 'var(--plum)', border: `1px solid ${effectiveActiveTab === 'jpeg2000' ? 'rgba(30,42,255,0.2)' : 'rgba(75,30,122,0.2)'}` }}>
+                {effectiveActiveTab === 'jpeg2000' ? 'JPEG2000 (DWT)' : 'JPEG (DCT)'}
               </span>
-              {activeTab === 'jpeg2000' && (
+              {effectiveActiveTab === 'jpeg2000' && (
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--ink-3)' }}>{result.wavelet} · Level {result.decompLevel}</span>
               )}
             </div>
@@ -463,7 +476,7 @@ export function ResultsPage() {
       )}
 
       {/* Charts tab */}
-      {activeTab === 'comparison' && (
+      {effectiveActiveTab === 'comparison' && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
             <div className="sp-card" style={{ padding: 24 }}>
