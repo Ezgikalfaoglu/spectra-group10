@@ -153,8 +153,14 @@ export function ResultsPage() {
     };
   })();
 
-  const currentResult = effectiveActiveTab === ranTab ? result : otherResult;
-  const baselineResult = effectiveActiveTab === ranTab ? otherResult : result;
+  // Only the explicit *other-method* tab shows the derived estimate. The run
+  // tab AND the Charts/comparison view both show the actual run result, so the
+  // headline metric cards never flip to fabricated numbers when viewing Charts.
+  const showingOtherMethod =
+    (effectiveActiveTab === 'jpeg' || effectiveActiveTab === 'jpeg2000') &&
+    effectiveActiveTab !== ranTab;
+  const currentResult = showingOtherMethod ? otherResult : result;
+  const baselineResult = showingOtherMethod ? result : otherResult;
   const imgSrc = currentResult.imageDataUrl || DEMO_IMAGE;
   const stepSize = currentResult.stepSize ?? 18;
 
@@ -167,18 +173,21 @@ export function ResultsPage() {
 
   const renderDelta = (label: string, current: number, baseline: number) => {
     const betterIsLower = label === 'MSE';
-    const delta = betterIsLower
-      ? ((baseline - current) / baseline) * 100
-      : ((current - baseline) / baseline) * 100;
-    const improved = betterIsLower ? delta > 0 : delta > 0;
+    // Guard against divide-by-zero (e.g. lossless MSE = 0) and non-finite inputs.
+    const rawDelta = baseline !== 0
+      ? (betterIsLower ? (baseline - current) / baseline : (current - baseline) / baseline) * 100
+      : 0;
+    const delta = Number.isFinite(rawDelta) ? rawDelta : 0;
+    const noBaseline = baseline === 0 && current === 0;
+    const improved = delta > 0;
     const arrow = improved ? '↑' : '↓';
     const color = improved ? 'var(--leaf)' : 'rgba(212,87,76,1)';
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontFamily: 'var(--font-mono)', fontSize: 11, color }}>
-        <span>{arrow}</span>
-        <span>{Math.abs(delta).toFixed(1)}%</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontFamily: 'var(--font-mono)', fontSize: 11, color: noBaseline ? 'var(--ink-4)' : color }}>
+        <span>{noBaseline ? '·' : arrow}</span>
+        <span>{noBaseline ? '—' : `${Math.abs(delta).toFixed(1)}%`}</span>
         <span style={{ color: 'var(--ink-4)' }}>
-          vs {effectiveActiveTab === 'jpeg2000' ? 'JPEG' : 'JPEG2000'}
+          vs {baselineResult.method}
         </span>
       </div>
     );
