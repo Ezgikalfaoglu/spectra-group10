@@ -39,6 +39,13 @@ interface UploadData {
   imageType: string;
 }
 
+interface PreprocData {
+  colorSpace?: 'ycbcr' | 'rgb' | 'luma';
+  primaryPlane?: string;     // 'Y' | 'R' | 'L'
+  planeDataUrl?: string;     // real preprocessed grayscale plane
+  levelShift?: boolean;      // [0,255] → [-128,127] before transform
+}
+
 const DEMO_UPLOAD: UploadData = {
   name: 'demo_image.png',
   format: 'PNG',
@@ -89,6 +96,7 @@ const WAVELET_INFO: Record<string, { full: string; description: string; quality:
 export function TransformPage() {
   const navigate = useNavigate();
   const [uploadData, setUploadData] = useState<UploadData | null>(null);
+  const [preproc, setPreproc] = useState<PreprocData | null>(null);
   const [isDemo, setIsDemo] = useState(false);
   const [settings, setSettings] = useState<TransformSettings>({
     method: 'jpeg2000',
@@ -105,6 +113,10 @@ export function TransformPage() {
       setUploadData(DEMO_UPLOAD);
       setIsDemo(true);
     }
+    const pp = localStorage.getItem('spectra_preprocessing');
+    if (pp) {
+      try { setPreproc(JSON.parse(pp)); } catch {}
+    }
     const saved = localStorage.getItem('spectra_transform');
     if (saved) {
       try {
@@ -120,8 +132,12 @@ export function TransformPage() {
   // actual transform (user's wavelet + level); for JPEG it still runs as an
   // image-characterisation pass (fixed db4 / L2) so the DCT result reflects
   // real image content instead of a step-size-only formula.
+  // Prefer the real preprocessed primary plane (stage 02 output). Falls back to
+  // the raw upload when preprocessing hasn't run, so the page still works alone.
+  const analysisSource = preproc?.planeDataUrl || uploadData?.dataUrl || '';
+
   useEffect(() => {
-    if (!uploadData?.dataUrl) {
+    if (!analysisSource) {
       setSubbandStats(null);
       return;
     }
@@ -132,7 +148,7 @@ export function TransformPage() {
     (async () => {
       try {
         const img = new Image();
-        img.src = uploadData.dataUrl;
+        img.src = analysisSource;
         await img.decode();
         const minDim = Math.min(img.width, img.height);
         const minNeeded = 1 << analysisLevel;
@@ -158,6 +174,12 @@ export function TransformPage() {
         ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, targetSide, targetSide);
         const imgData = ctx.getImageData(0, 0, targetSide, targetSide);
         const { data: gray, side } = imageDataToGray(imgData, targetSide);
+        // Apply the JPEG level-shift if preprocessing enabled it: [0,255] → [-128,127].
+        // Removes the large DC offset so the transform's approximation band is
+        // centered — real effect on coefficient energy and downstream metrics.
+        if (preproc?.levelShift) {
+          for (let i = 0; i < gray.length; i++) gray[i] -= 128;
+        }
         const result = waveletPacket2D(gray, side, analysisFilter, analysisLevel);
         if (!cancelled) setSubbandStats(result.subbands);
       } catch {
@@ -165,7 +187,7 @@ export function TransformPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [uploadData?.dataUrl, settings.method, settings.waveletFilter, settings.decompositionLevel]);
+  }, [analysisSource, preproc?.levelShift, settings.method, settings.waveletFilter, settings.decompositionLevel]);
 
   const update = <K extends keyof TransformSettings>(key: K, value: TransformSettings[K]) =>
     setSettings(s => ({ ...s, [key]: value }));
@@ -470,6 +492,11 @@ export function TransformPage() {
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--ink-4)', marginTop: 2 }}>
                   {uploadData.resolution} · {uploadData.sizeKB} KB
                 </div>
+                {preproc?.planeDataUrl && (
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--leaf)', marginTop: 3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                    ● analysing {preproc.primaryPlane ?? 'Y'} plane · {(preproc.colorSpace ?? 'ycbcr').toUpperCase()}
+                  </div>
+                )}
               </div>
             </div>
           )}

@@ -10,7 +10,9 @@ import { Code2, ArrowRight, Info } from 'lucide-react';
 import { PipelineStepper } from '../components/PipelineStepper';
 import { TypePresetBanner } from '../components/TypePresetBanner';
 import { computeMetrics } from '../lib/pipeline';
-import type { SubbandStat } from '../lib/dwt';
+import { analyzeImage } from '../lib/analysis';
+import { analyzeEntropy } from '../lib/entropy';
+import type { SubbandStat, Filter } from '../lib/dwt';
 
 interface EntropySettings {
   coder: 'huffman-default' | 'huffman-custom' | 'arithmetic';
@@ -28,7 +30,14 @@ interface QuantState {
 
 interface TransformState {
   method: 'jpeg' | 'jpeg2000';
+  waveletFilter?: string;
+  decompositionLevel?: number;
   subbandStats?: SubbandStat[];
+}
+
+interface PreprocData {
+  planeDataUrl?: string;
+  levelShift?: boolean;
 }
 
 const DEFAULTS: EntropySettings = {
@@ -74,6 +83,9 @@ export function EntropyPage() {
   const [imageType, setImageType] = useState('Natural');
   const [quant, setQuant] = useState<QuantState>(DEFAULT_QUANT);
   const [transform, setTransform] = useState<TransformState>(DEFAULT_TRANSFORM);
+  const [preproc, setPreproc] = useState<PreprocData | null>(null);
+  const [uploadSource, setUploadSource] = useState('');
+  const [coeffSubbands, setCoeffSubbands] = useState<SubbandStat[] | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem('spectra_entropy');
@@ -92,7 +104,13 @@ export function EntropyPage() {
         const parsed = JSON.parse(upload);
         setImageResolution(parseResolution(parsed?.resolution));
         if (parsed?.imageType) setImageType(String(parsed.imageType));
+        setUploadSource(String(parsed?.dataUrl || ''));
       } catch {}
+    }
+
+    const pp = localStorage.getItem('spectra_preprocessing');
+    if (pp) {
+      try { setPreproc(JSON.parse(pp)); } catch {}
     }
 
     const quantRaw = localStorage.getItem('spectra_quantization');
@@ -111,6 +129,8 @@ export function EntropyPage() {
         const parsed = JSON.parse(transformRaw);
         setTransform({
           method: parsed?.method === 'jpeg' ? 'jpeg' : 'jpeg2000',
+          waveletFilter: typeof parsed?.waveletFilter === 'string' ? parsed.waveletFilter : 'db4',
+          decompositionLevel: Number(parsed?.decompositionLevel) || 2,
           subbandStats: Array.isArray(parsed?.subbandStats) ? parsed.subbandStats : undefined,
         });
       } catch {}
@@ -120,12 +140,26 @@ export function EntropyPage() {
   const update = <K extends keyof EntropySettings>(k: K, v: EntropySettings[K]) =>
     setSettings(s => ({ ...s, [k]: v }));
 
-  const handleNext = () => {
-    localStorage.setItem('spectra_entropy', JSON.stringify(settings));
-    navigate('/processing');
-  };
+  // Recompute the real leaf coefficients so we can measure actual entropy.
+  const analysisSource = preproc?.planeDataUrl || uploadSource;
+  useEffect(() => {
+    if (!analysisSource) { setCoeffSubbands(null); return; }
+    const isJ2K = transform.method === 'jpeg2000';
+    const filter: Filter = isJ2K ? ((transform.waveletFilter as Filter) || 'db4') : 'db4';
+    const level = isJ2K ? (transform.decompositionLevel || 2) : 2;
+    let cancelled = false;
+    analyzeImage({ source: analysisSource, filter, level, levelShift: preproc?.levelShift, keepCoeffs: true })
+      .then(res => { if (!cancelled) setCoeffSubbands(res ? res.subbands : null); })
+      .catch(() => { if (!cancelled) setCoeffSubbands(null); });
+    return () => { cancelled = true; };
+  }, [analysisSource, preproc?.levelShift, transform.method, transform.waveletFilter, transform.decompositionLevel]);
 
-  // Same model as the Processing result — Entropy preview matches the final CR.
+  // Real entropy measurement on the actual quantized symbols.
+  const realEntropy = coeffSubbands
+    ? analyzeEntropy(coeffSubbands, quant.stepSize, settings.coder, quant.lossless)
+    : null;
+
+  // Model fallback (used until the coefficient analysis finishes).
   const metrics = computeMetrics({
     method: transform.method,
     subbandStats: transform.subbandStats,
@@ -134,11 +168,27 @@ export function EntropyPage() {
     imageType,
     coder: settings.coder,
   });
-  const bppExact = 8 / metrics.cr;
+
+  const isReal = !!realEntropy;
+  const crNum = realEntropy ? realEntropy.cr : metrics.cr;
+  const bppExact = realEntropy ? realEntropy.bpp : 8 / metrics.cr;
   const bpp = +bppExact.toFixed(2);
-  const cr = metrics.cr.toFixed(1);
+  const cr = crNum.toFixed(1);
   const pixelCount = imageResolution.width * imageResolution.height;
   const estimatedKB = Math.max(1, Math.round((pixelCount * bppExact) / (8 * 1024)));
+
+  const handleNext = () => {
+    const payload: Record<string, unknown> = { ...settings };
+    if (realEntropy) {
+      payload.realCr = realEntropy.cr;
+      payload.realBpp = realEntropy.bpp;
+      payload.realBits = realEntropy.bits;
+      payload.entropy = realEntropy.entropy;
+      payload.avgCodeLen = realEntropy.avgCodeLen;
+    }
+    localStorage.setItem('spectra_entropy', JSON.stringify(payload));
+    navigate('/processing');
+  };
   const coderBarGradient = {
     'huffman-default': 'linear-gradient(180deg, var(--klein) 0%, rgba(30,42,255,0.4) 100%)',
     'huffman-custom': 'linear-gradient(180deg, var(--leaf) 0%, rgba(31,138,94,0.4) 100%)',
@@ -250,8 +300,12 @@ export function EntropyPage() {
 
           <div className="sp-card" style={{ overflow: 'hidden' }}>
             <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--rule)', display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.22em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>ESTIMATED PAYLOAD</span>
-              <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--ink-4)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Live preview</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.22em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>
+                {isReal ? 'MEASURED PAYLOAD' : 'ESTIMATED PAYLOAD'}
+              </span>
+              <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: 9.5, color: isReal ? 'var(--leaf)' : 'var(--ink-4)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                {isReal ? '● real coding' : 'Live preview'}
+              </span>
             </div>
             <div style={{ padding: 24 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
@@ -285,26 +339,56 @@ export function EntropyPage() {
                 </div>
               </div>
 
-              {/* Symbol distribution mini bar chart */}
+              {/* Symbol distribution — real histogram of quantized indices */}
               <div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.12em', color: 'var(--ink-3)', textTransform: 'uppercase', marginBottom: 10 }}>
-                  Symbol frequency · estimated
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.12em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>
+                    Symbol frequency · {isReal ? 'measured' : 'estimated'}
+                  </span>
+                  {realEntropy && (
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-4)', letterSpacing: '0.06em' }}>
+                      H = {realEntropy.entropy} b/sym · {realEntropy.distinctSymbols} symbols
+                    </span>
+                  )}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 80 }}>
-                  {[88, 64, 42, 28, 18, 12, 8, 5, 3, 2, 1].map((h, i) => (
-                    <div key={i} style={{
-                      flex: 1, height: `${h}%`,
-                      background: coderBarGradient,
-                      borderRadius: '2px 2px 0 0', opacity: 0.3 + (h / 100) * 0.7,
-                    }} />
-                  ))}
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-4)', letterSpacing: '0.08em', marginTop: 6 }}>
-                  <span>0 (run)</span>
-                  <span>±1</span>
-                  <span>±2</span>
-                  <span>±4+</span>
-                </div>
+                {(() => {
+                  const buckets = realEntropy
+                    ? realEntropy.buckets
+                    : [88, 64, 42, 18, 6].map((c, i) => ({ label: ['0 (run)', '±1', '±2', '±3', '±4+'][i], count: c }));
+                  const total = Math.max(1, buckets.reduce((s, b) => s + b.count, 0));
+                  // Linear scale — bar height is proportional to each bucket's
+                  // share, normalised so the largest bucket fills the chart.
+                  const maxPct = Math.max(...buckets.map(b => (b.count / total) * 100), 1);
+                  return (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 80 }}>
+                        {buckets.map((b, i) => {
+                          const pct = (b.count / total) * 100;
+                          const h = Math.max(b.count > 0 ? 2 : 0, (pct / maxPct) * 100);
+                          return (
+                            <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', height: '100%' }}>
+                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--ink-4)', marginBottom: 3 }}>
+                                {pct >= 0.05 ? `${pct.toFixed(pct < 10 ? 1 : 0)}%` : '·'}
+                              </span>
+                              <div style={{
+                                width: '100%',
+                                height: `${h}%`,
+                                background: coderBarGradient,
+                                borderRadius: '2px 2px 0 0', opacity: 0.45 + (h / 100) * 0.55,
+                              }} />
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-4)', letterSpacing: '0.08em', marginTop: 6 }}>
+                        {buckets.map((b, i) => <span key={i} style={{ flex: 1, textAlign: 'center' }}>{b.label}</span>)}
+                      </div>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8.5, color: 'var(--ink-4)', letterSpacing: '0.04em', marginTop: 8, fontStyle: 'italic', textAlign: 'right' }}>
+                        % = share of all coefficients
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           </div>

@@ -50,6 +50,7 @@ export interface SubbandStat {
   max: number;          // max |c|
   zeroFrac: number;     // fraction of |c| < 0.5
   size: number;         // side length of this subband (W / 2^depth)
+  coeffs?: Float32Array; // raw leaf coefficients — only when keepCoeffs requested
 }
 
 export interface DWTResult {
@@ -245,9 +246,11 @@ export function waveletPacket2D(
   side: number,
   filter: Filter,
   maxLevel: number,
+  keepCoeffs = false,
 ): DWTResult {
   if (maxLevel < 1) {
     const stat = computeStat('', 0, image, side);
+    if (keepCoeffs) stat.coeffs = image;
     return { filter, level: 0, imageSize: side, subbands: [stat], totalEnergy: stat.energy };
   }
 
@@ -290,6 +293,7 @@ export function waveletPacket2D(
     const shouldSplit = canSplit && (isApproximationPath || variance > detailThreshold);
 
     if (!shouldSplit) {
+      if (keepCoeffs) stat.coeffs = band;
       subbands.push(stat);
       return;
     }

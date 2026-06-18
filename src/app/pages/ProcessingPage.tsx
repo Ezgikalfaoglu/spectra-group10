@@ -22,12 +22,15 @@ interface TransformSettings {
 }
 interface QuantizationSettings {
   quantizationType: 'uniform' | 'scalar'; stepSize: number; lossless: boolean;
+  realMse?: number; realPsnr?: number; realSparsity?: number;
 }
 interface EntropySettings {
   coder: Coder;
+  realCr?: number; realBpp?: number; realBits?: number;
 }
 interface Results {
   mse: number; psnr: number; compressionRatio: string; sparsityRatio: string;
+  bpp?: number; outputKB?: number; measured?: boolean;
 }
 
 const PIPELINE_STAGES = [
@@ -41,11 +44,20 @@ const PIPELINE_STAGES = [
 
 const STEP_DURATION = 800;
 
+function parsePixels(resolution: string): number {
+  const match = resolution?.match(/(\d+)\D+(\d+)/);
+  if (!match) return 1024 * 1024;
+  return Number(match[1]) * Number(match[2]);
+}
+
+// Prefer the real measured values from the Quantization (MSE/PSNR/sparsity) and
+// Entropy (CR/bpp) stages. Fall back to the model only for whatever is missing.
 function computeResults(
   t: TransformSettings,
   q: QuantizationSettings,
+  e: EntropySettings,
   imageType: string,
-  coder: Coder | undefined,
+  resolution: string,
 ): Results {
   const m = computeMetrics({
     method: t.method,
@@ -53,13 +65,26 @@ function computeResults(
     stepSize: q.stepSize,
     lossless: q.lossless,
     imageType,
-    coder: coder ?? 'huffman-default',
+    coder: e.coder ?? 'huffman-default',
   });
+
+  const mse = q.realMse ?? m.mse;
+  const psnr = q.realPsnr ?? m.psnr;
+  const sparsity = q.realSparsity ?? m.sparsity;
+  const cr = e.realCr ?? m.cr;
+  const bpp = e.realBpp ?? +(8 / cr).toFixed(3);
+  const measured = q.realPsnr != null && e.realCr != null;
+
+  const outputKB = Math.max(1, Math.round((parsePixels(resolution) * bpp) / (8 * 1024)));
+
   return {
-    mse: m.mse,
-    psnr: m.psnr,
-    compressionRatio: m.crLabel,
-    sparsityRatio: `${m.sparsity}%`,
+    mse: +mse.toFixed(2),
+    psnr: +psnr.toFixed(2),
+    compressionRatio: `${cr.toFixed(1)}:1`,
+    sparsityRatio: `${Math.round(sparsity)}%`,
+    bpp: +bpp.toFixed(3),
+    outputKB,
+    measured,
   };
 }
 
@@ -128,7 +153,7 @@ export function ProcessingPage() {
 
         if (idx === PIPELINE_STAGES.length - 1) {
           const finalId = window.setTimeout(() => {
-            const r = computeResults(transform, quant, upload.imageType, entropy.coder);
+            const r = computeResults(transform, quant, entropy, upload.imageType, upload.resolution);
             setResults(r);
             setIsRunning(false);
             setIsDone(true);
@@ -149,6 +174,9 @@ export function ProcessingPage() {
               psnr: r.psnr,
               cr: r.compressionRatio,
               sparsity: r.sparsityRatio,
+              bpp: r.bpp,
+              outputKB: r.outputKB,
+              measured: r.measured,
               imageDataUrl: upload.dataUrl,
               settings: {
                 method: transform.method,

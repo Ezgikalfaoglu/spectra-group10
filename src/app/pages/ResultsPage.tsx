@@ -92,13 +92,68 @@ export function ResultsPage() {
   URL.revokeObjectURL(url);
 };
 
-  const handleDownloadCompressed = () => {
+  const handleDownloadCompressed = async () => {
     if (!currentResult.imageDataUrl) return;
-    
-    const a = document.createElement('a');
-    a.href = currentResult.imageDataUrl;
-    a.download = `${currentResult.imageName?.replace(/\.[^/.]+$/, '') || 'compressed'}-${currentResult.method || 'compressed'}.png`;
-    a.click();
+
+    const baseName = currentResult.imageName?.replace(/\.[^/.]+$/, '') || 'compressed';
+    const fileName = `${baseName}-${currentResult.method || 'compressed'}.jpg`;
+
+    try {
+      const src = currentResult.imageDataUrl;
+      const img = new Image();
+      if (/^https?:\/\//.test(src)) img.crossOrigin = 'anonymous';
+      img.src = src;
+      await img.decode();
+
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth || img.width;
+      canvas.height = img.naturalHeight || img.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('no ctx');
+      ctx.drawImage(img, 0, 0);
+
+      const encode = (q: number): Promise<Blob | null> =>
+        new Promise(res => canvas.toBlob(res, 'image/jpeg', q));
+
+      // Target the real measured compressed size (outputKB) by searching JPEG
+      // quality — the downloaded file is genuinely smaller, and as close to the
+      // reported size as a browser JPEG encoder allows.
+      const targetBytes = (currentResult as any).outputKB
+        ? (currentResult as any).outputKB * 1024
+        : null;
+
+      let blob: Blob | null = null;
+      if (targetBytes) {
+        let lo = 0.05, hi = 0.95;
+        for (let i = 0; i < 8; i++) {
+          const q = (lo + hi) / 2;
+          const b = await encode(q);
+          if (!b) break;
+          if (b.size > targetBytes) { hi = q; } else { lo = q; blob = b; }
+        }
+        if (!blob) blob = await encode(0.05); // target smaller than min — take lowest
+      } else {
+        // No measured size — map step size to quality (higher step → lower quality).
+        const step = (currentResult as any).stepSize ?? 18;
+        const q = Math.min(0.92, Math.max(0.1, 1 - step / 70));
+        blob = await encode(q);
+      }
+
+      if (!blob) throw new Error('encode failed');
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // Fallback — serve the stored image as-is.
+      const a = document.createElement('a');
+      a.href = currentResult.imageDataUrl;
+      a.download = fileName;
+      a.click();
+    }
   };
 
   useEffect(() => {
@@ -211,6 +266,11 @@ export function ResultsPage() {
           <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.1em', color: 'var(--ink-3)', marginTop: 8, textTransform: 'uppercase' }}>
             {isDemo ? 'Demo specimen · run a compression for real results' : `Specimen: ${result.imageName}`}
           </p>
+          {!isDemo && (result as any).measured && (
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.08em', color: 'var(--leaf)', marginTop: 6, textTransform: 'uppercase' }}>
+              ● measured · {(result as any).bpp} bpp · ~{(result as any).outputKB} KB bitstream
+            </p>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <Link to="/upload" className="sp-btn sp-btn-klein sp-btn-sm">

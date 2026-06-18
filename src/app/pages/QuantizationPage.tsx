@@ -26,7 +26,9 @@ import { TypePresetBanner } from '../components/TypePresetBanner';
 import { DCTBlockPanel } from '../components/DCTBlockPanel';
 import { DWTSubbandsViz } from '../components/DWTSubbandsViz';
 import { computeMetrics } from '../lib/pipeline';
-import type { SubbandStat } from '../lib/dwt';
+import { analyzeImage } from '../lib/analysis';
+import { quantizeSubbands, type QuantResult } from '../lib/quantize';
+import type { SubbandStat, Filter } from '../lib/dwt';
 
 interface QuantizationSettings {
   quantizationType: 'uniform' | 'scalar';
@@ -39,6 +41,11 @@ interface StoredTransform {
   waveletFilter: string;
   decompositionLevel: number;
   subbandStats?: SubbandStat[];
+}
+
+interface PreprocData {
+  planeDataUrl?: string;
+  levelShift?: boolean;
 }
 
 const DEFAULT_TRANSFORM: StoredTransform = {
@@ -59,7 +66,10 @@ function normalizeQuantizationType(
 export function QuantizationPage() {
   const navigate = useNavigate();
   const [transform, setTransform] = useState<StoredTransform | null>(null);
+  const [preproc, setPreproc] = useState<PreprocData | null>(null);
+  const [uploadSource, setUploadSource] = useState('');
   const [uploadType, setUploadType] = useState('Natural');
+  const [coeffSubbands, setCoeffSubbands] = useState<SubbandStat[] | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
   const [isLosslessForced, setIsLosslessForced] = useState(false);
   const [settings, setSettings] = useState<QuantizationSettings>({
@@ -76,10 +86,16 @@ export function QuantizationPage() {
       try {
         const u = JSON.parse(upload);
         setUploadType(String(u.imageType || 'Natural'));
+        setUploadSource(String(u.dataUrl || ''));
         const forced = ['fingerprint', 'biomedical'].includes(String(u.imageType || '').toLowerCase());
         forcedLossless = forced;
         setIsLosslessForced(forced);
       } catch {}
+    }
+
+    const pp = localStorage.getItem('spectra_preprocessing');
+    if (pp) {
+      try { setPreproc(JSON.parse(pp)); } catch {}
     }
 
     const saved = localStorage.getItem('spectra_transform');
@@ -116,11 +132,36 @@ export function QuantizationPage() {
     }
   }, [transform?.method, settings.quantizationType]);
 
+  // Recompute the real leaf coefficients from the (preprocessed) image so we can
+  // run actual quantization on them — not a model. Mirrors the Transform page's
+  // analysis settings (JPEG path characterised with db4 / L2).
+  const analysisSource = preproc?.planeDataUrl || uploadSource;
+  useEffect(() => {
+    if (!transform || !analysisSource) { setCoeffSubbands(null); return; }
+    const isJ2K = transform.method === 'jpeg2000';
+    const filter: Filter = isJ2K ? (transform.waveletFilter as Filter) : 'db4';
+    const level = isJ2K ? transform.decompositionLevel : 2;
+    let cancelled = false;
+    analyzeImage({ source: analysisSource, filter, level, levelShift: preproc?.levelShift, keepCoeffs: true })
+      .then(res => { if (!cancelled) setCoeffSubbands(res ? res.subbands : null); })
+      .catch(() => { if (!cancelled) setCoeffSubbands(null); });
+    return () => { cancelled = true; };
+  }, [analysisSource, preproc?.levelShift, transform?.method, transform?.waveletFilter, transform?.decompositionLevel]);
+
   const handleNext = () => {
-    const payload = {
+    const payload: Record<string, unknown> = {
       ...settings,
       stepSize: settings.lossless ? 1 : settings.stepSize,
     };
+    // Carry the real measured distortion forward so the downstream stages can
+    // show the same numbers instead of re-estimating from a model.
+    if (realQuant) {
+      payload.realMse = realQuant.mse;
+      payload.realPsnr = realQuant.psnr;
+      payload.realSparsity = realQuant.sparsity;
+      payload.totalCoeffs = realQuant.totalCoeffs;
+      payload.zeroCoeffs = realQuant.zeroCoeffs;
+    }
     localStorage.setItem('spectra_quantization', JSON.stringify(payload));
     navigate('/entropy');
   };
@@ -137,6 +178,12 @@ export function QuantizationPage() {
     }));
   }, [transform?.subbandStats, effectiveStep]);
 
+  // Real quantization of the actual coefficients — real MSE / PSNR / sparsity.
+  const realQuant: QuantResult | null = useMemo(() => {
+    if (!coeffSubbands || coeffSubbands.length === 0) return null;
+    return quantizeSubbands(coeffSubbands, effectiveStep, settings.lossless);
+  }, [coeffSubbands, effectiveStep, settings.lossless]);
+
   // Live preview — same model as Entropy/Processing (coder defaults to the
   // pipeline baseline since the entropy stage hasn't been visited yet).
   const previewMetrics = computeMetrics({
@@ -147,11 +194,15 @@ export function QuantizationPage() {
     imageType: uploadType,
     coder: 'huffman-default',
   });
+  // Prefer the real measured PSNR/sparsity; fall back to the model estimate
+  // until the coefficient analysis finishes (or if the image is too small).
+  const effectivePsnr = realQuant ? realQuant.psnr : previewMetrics.psnr;
+  const effectiveSparsity = realQuant ? realQuant.sparsity : previewMetrics.sparsity;
   const metrics = {
-    psnr: settings.lossless ? '∞' : previewMetrics.psnr.toFixed(1),
+    psnr: settings.lossless ? '∞' : effectivePsnr.toFixed(1),
     cr: previewMetrics.crLabel,
   };
-  const psnrValue = settings.lossless ? Infinity : previewMetrics.psnr;
+  const psnrValue = settings.lossless ? Infinity : effectivePsnr;
   const psnrColor = psnrValue > 35
     ? 'var(--leaf)'
     : psnrValue >= 28
@@ -415,8 +466,12 @@ export function QuantizationPage() {
           {/* Quality estimate card */}
           <div className="sp-card" style={{ overflow: 'hidden' }}>
             <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--rule)', display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.22em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>ESTIMATED OUTPUT</span>
-              <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.1em', color: 'var(--ink-4)', textTransform: 'uppercase' }}>Live Preview</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.22em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>
+                {realQuant ? 'MEASURED OUTPUT' : 'ESTIMATED OUTPUT'}
+              </span>
+              <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.1em', color: realQuant ? 'var(--leaf)' : 'var(--ink-4)', textTransform: 'uppercase' }}>
+                {realQuant ? '● real quantization' : 'Live Preview'}
+              </span>
             </div>
             <div style={{ padding: 24 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 24 }}>
@@ -457,6 +512,23 @@ export function QuantizationPage() {
                   )}
                 </div>
               </div>
+
+              {/* Real sparsity readout */}
+              {!settings.lossless && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', marginBottom: 18, borderRadius: 'var(--r-sm)', background: 'var(--paper-2)', border: '1px solid var(--rule)' }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.12em', color: 'var(--ink-3)', textTransform: 'uppercase' }}>
+                    Sparsity {realQuant ? '· measured' : '· estimated'}
+                  </span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--klein)' }}>
+                    {effectiveSparsity.toFixed(1)}%
+                    {realQuant && (
+                      <span style={{ color: 'var(--ink-4)', fontSize: 9, marginLeft: 8 }}>
+                        {realQuant.zeroCoeffs.toLocaleString()} / {realQuant.totalCoeffs.toLocaleString()} → 0
+                      </span>
+                    )}
+                  </span>
+                </div>
+              )}
 
               {/* Visual quality scale */}
               <div>
