@@ -36,6 +36,11 @@ const MOCK_HISTORY: RunRecord[] = [
 type SortKey = keyof RunRecord;
 type SortDir = 'asc' | 'desc';
 
+/* Demo rows are display-only. They must never be written back to localStorage. */
+const MOCK_IDS = new Set(MOCK_HISTORY.map(m => m.id));
+const persistRealHistory = (rows: RunRecord[]) =>
+  localStorage.setItem('compressionHistory', JSON.stringify(rows.filter(r => !MOCK_IDS.has(r.id))));
+
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' });
 }
@@ -346,11 +351,12 @@ export function HistoryPage() {
                           style={{ width: 28, height: 28, borderRadius: 6, background: 'white', border: '1px solid var(--rule)', color: 'var(--ink-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', textDecoration: 'none' }}>
                           <Eye style={{ width: 13, height: 13 }} />
                         </Link>
-                        <button onClick={e => { 
-                          e.stopPropagation(); 
+                        <button onClick={e => {
+                          e.stopPropagation();
                           const newRows = rows.filter(x => x.id !== row.id);
                           setRows(newRows);
-                          localStorage.setItem("compressionHistory", JSON.stringify(newRows));
+                          // Persist only real runs — never the display-only MOCK_HISTORY rows.
+                          persistRealHistory(newRows);
                         }}
                           style={{ width: 28, height: 28, borderRadius: 6, background: 'white', border: '1px solid var(--rule)', color: 'var(--ink-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.15s' }}>
                           <Trash2 style={{ width: 13, height: 13 }} />

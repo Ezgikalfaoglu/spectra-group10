@@ -186,6 +186,7 @@ export function UploadPage() {
   const [pageState, setPageState] = useState<PageState>('idle');
   const [isDragging, setIsDragging] = useState(false);
   const [errorFileName, setErrorFileName] = useState('');
+  const [errorTitle, setErrorTitle] = useState('Unsupported Format');
   const [file, setFile] = useState<UploadedFile | null>(null);
   const [isDemo, setIsDemo] = useState(false);
 
@@ -208,6 +209,7 @@ export function UploadPage() {
       const ext = f.name.toLowerCase().split('.').pop() || '';
 
       if (!SUPPORTED_EXTS.includes(ext)) {
+        setErrorTitle('Unsupported Format');
         setErrorFileName(f.name);
         setPageState('error');
         setIsDragging(false);
@@ -215,6 +217,14 @@ export function UploadPage() {
       }
 
       const reader = new FileReader();
+
+      // Surface read failures (corrupt/unreadable file) instead of failing silently.
+      reader.onerror = () => {
+        setErrorTitle("We couldn't read this file. Please try another image.");
+        setErrorFileName(f.name);
+        setPageState('error');
+        setIsDragging(false);
+      };
 
       reader.onload = (e) => {
         const dataUrl = e.target?.result as string;
@@ -582,7 +592,7 @@ export function UploadPage() {
                             marginBottom: 6,
                           }}
                         >
-                          Unsupported Format
+                          {errorTitle}
                         </p>
 
                         <p
