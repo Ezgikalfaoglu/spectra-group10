@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, Link } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   FileCheck, Shuffle, Braces, SlidersHorizontal, Code2,
@@ -103,17 +103,31 @@ export function ProcessingPage() {
   const [errorStage, setErrorStage] = useState<number | null>(null);
   const [countdown, setCountdown] = useState(3);
   const [logLines, setLogLines] = useState<{ t: number; text: string }[]>([]);
+  const [noData, setNoData] = useState(false);
 
   useEffect(() => {
     const u = localStorage.getItem('spectra_upload');
     const t = localStorage.getItem('spectra_transform');
     const q = localStorage.getItem('spectra_quantization');
 
-    if (!u || !t || !q) return;
+    // No pipeline data yet — show a recovery CTA instead of an empty spinner.
+    if (!u || !t || !q) {
+      setNoData(true);
+      return;
+    }
 
-    setUpload(JSON.parse(u));
-    setTransform(JSON.parse(t));
-    setQuant(JSON.parse(q));
+    // Corrupt localStorage must never crash the page — purge and recover.
+    try {
+      setUpload(JSON.parse(u));
+      setTransform(JSON.parse(t));
+      setQuant(JSON.parse(q));
+    } catch {
+      localStorage.removeItem('spectra_upload');
+      localStorage.removeItem('spectra_transform');
+      localStorage.removeItem('spectra_quantization');
+      navigate('/upload');
+      return;
+    }
 
     // Entropy stage is optional — fall back to default coder if not visited.
     const e = localStorage.getItem('spectra_entropy');
@@ -122,7 +136,7 @@ export function ProcessingPage() {
     } else {
       setEntropy({ coder: 'huffman-default' });
     }
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
     if (!upload || !transform || !quant || !entropy) return;
@@ -235,6 +249,34 @@ export function ProcessingPage() {
     : upload?.imageType === 'Synthetic'
     ? 'Optimised for hard-edge transitions — arithmetic coder preferred'
     : 'Standard compression pipeline';
+
+  if (noData) {
+    return (
+      <div style={{ maxWidth: 600, margin: '120px auto 0', padding: '0 24px', textAlign: 'center' }}>
+        <div style={{
+          width: 80, height: 80, borderRadius: '50%',
+          background: 'rgba(30,42,255,0.06)', border: '2px solid rgba(30,42,255,0.25)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          margin: '0 auto 24px',
+        }}>
+          <AlertTriangle style={{ width: 36, height: 36, color: 'var(--klein)' }} />
+        </div>
+        <h2 style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 36, color: 'var(--ink)', marginBottom: 8 }}>
+          No pipeline data
+        </h2>
+        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, letterSpacing: '0.12em', color: 'var(--ink-3)', marginBottom: 24, lineHeight: 1.6 }}>
+          There's nothing to process yet. Start a new run from the upload step.
+        </p>
+        <Link
+          to="/upload"
+          className="sp-btn sp-btn-klein"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+        >
+          Go to Upload
+        </Link>
+      </div>
+    );
+  }
 
   if (errorStage !== null) {
     return (
