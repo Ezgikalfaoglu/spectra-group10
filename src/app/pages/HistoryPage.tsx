@@ -60,7 +60,13 @@ export function HistoryPage() {
     const stored = localStorage.getItem('compressionHistory');
     let history: RunRecord[] = [];
     if (stored) { try { history = JSON.parse(stored); } catch {} }
-    setRows([...history, ...MOCK_HISTORY].slice(0, 20));
+    const real = (Array.isArray(history) ? history : [])
+      // Real entries store the classification as `imageType`; map it to `type`
+      // so the type-filter pills work for them too.
+      .map(h => ({ ...h, type: (h as any).type ?? (h as any).imageType }));
+    // Show ONLY the user's real runs. Fall back to the sample log only when there
+    // are none, so the page isn't blank on first visit — never mix the two.
+    setRows(real.length ? real.slice(0, 20) : MOCK_HISTORY);
   }, []);
 
   const handleSort = (key: SortKey) => {

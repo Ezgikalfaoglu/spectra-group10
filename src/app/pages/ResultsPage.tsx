@@ -131,7 +131,25 @@ export function ResultsPage() {
           if (!b) break;
           if (b.size > targetBytes) { hi = q; } else { lo = q; blob = b; }
         }
-        if (!blob) blob = await encode(0.05); // target smaller than min — take lowest
+        if (!blob) blob = await encode(0.05); // quality floor reached
+
+        // Some images (e.g. zone plates) are pathological for the JPEG encoder —
+        // even at minimum quality it can't reach the measured wavelet size. Shrink
+        // the resolution in steps until the file size approaches the target, so the
+        // downloaded file ≈ the reported bitstream size.
+        if (blob && blob.size > targetBytes * 1.15) {
+          const baseW = canvas.width, baseH = canvas.height;
+          for (let scale = 0.85; scale >= 0.25; scale -= 0.12) {
+            const c2 = document.createElement('canvas');
+            c2.width = Math.max(16, Math.round(baseW * scale));
+            c2.height = Math.max(16, Math.round(baseH * scale));
+            const cx = c2.getContext('2d');
+            if (!cx) break;
+            cx.drawImage(canvas, 0, 0, c2.width, c2.height);
+            const b = await new Promise<Blob | null>(res => c2.toBlob(res, 'image/jpeg', 0.6));
+            if (b) { blob = b; if (b.size <= targetBytes * 1.1) break; }
+          }
+        }
       } else {
         // No measured size — map step size to quality (higher step → lower quality).
         const step = (currentResult as any).stepSize ?? 18;
@@ -218,6 +236,14 @@ export function ResultsPage() {
   const baselineResult = showingOtherMethod ? result : otherResult;
   const imgSrc = currentResult.imageDataUrl || DEMO_IMAGE;
   const stepSize = currentResult.stepSize ?? 18;
+  // Lossless = perfect reconstruction → MSE 0, PSNR ∞. Keep the two consistent
+  // (a stored PSNR like 50 dB alongside MSE 0 is mathematically contradictory).
+  const lossless = !!(currentResult as any).lossless;
+  // Real decoded image (inverse DWT of quantized coeffs) for the run tab. When
+  // present, the comparator shows the genuine reconstruction instead of a CSS
+  // approximation, so the visible quality matches the measured MSE/PSNR.
+  const reconSrc: string = !showingOtherMethod ? ((currentResult as any).reconstructedDataUrl || '') : '';
+  const hasRecon = !!reconSrc;
 
   // Scale distortion aggressively with step size so high-CR runs look clearly degraded
   const distBlur       = stepSize > 32 ? 8.5  : stepSize > 24 ? 5.5  : stepSize > 16 ? 3.0  : stepSize > 8 ? 1.2  : 0.3;
@@ -322,8 +348,8 @@ export function ResultsPage() {
       {/* Metrics row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 28 }}>
         {[
-          { label: 'MSE', value: `${currentResult.mse?.toFixed?.(2) ?? currentResult.mse}`, hint: 'Lower is better', currentValue: currentResult.mse, baselineValue: baselineResult.mse },
-          { label: 'PSNR', value: `${currentResult.psnr?.toFixed?.(2) ?? currentResult.psnr}`, unit: 'dB', hint: '> 30 dB threshold', currentValue: currentResult.psnr, baselineValue: baselineResult.psnr },
+          { label: 'MSE', value: lossless ? '0.00' : `${currentResult.mse?.toFixed?.(2) ?? currentResult.mse}`, hint: 'Lower is better', currentValue: currentResult.mse, baselineValue: baselineResult.mse },
+          { label: 'PSNR', value: lossless ? '∞' : `${currentResult.psnr?.toFixed?.(2) ?? currentResult.psnr}`, unit: lossless ? '' : 'dB', hint: lossless ? 'Lossless · exact' : '> 30 dB threshold', currentValue: currentResult.psnr, baselineValue: baselineResult.psnr },
           { label: 'CR', value: currentResult.cr, hint: 'Size reduction', currentValue: parseFloat(currentResult.cr), baselineValue: parseFloat(baselineResult.cr) },
           { label: 'Sparsity', value: currentResult.sparsity, hint: 'Zero coefficients', currentValue: parseFloat(currentResult.sparsity), baselineValue: parseFloat(baselineResult.sparsity) },
         ].map(m => {
@@ -484,11 +510,11 @@ export function ResultsPage() {
               <ComparisonSlider
                 mode={compareMode}
                 originalSrc={imgSrc}
-                reconstructedSrc={imgSrc}
+                reconstructedSrc={hasRecon ? reconSrc : imgSrc}
                 originalFilter="none"
-                reconstructedFilter={`blur(${distBlur}px) contrast(${distContrast}) saturate(${distSaturate}) brightness(${distBrightness})${useBlockify ? ' url(#blockify)' : ''}`}
+                reconstructedFilter={hasRecon ? 'none' : `blur(${distBlur}px) contrast(${distContrast}) saturate(${distSaturate}) brightness(${distBrightness})${useBlockify ? ' url(#blockify)' : ''}`}
               />
-              {useBlockify && (
+              {useBlockify && !hasRecon && (
                 <div
                   style={{
                     position: "absolute",
@@ -513,8 +539,8 @@ export function ResultsPage() {
                   ))}
                 </div>
                 {[
-                  { metric: 'MSE', value: `${currentResult.mse?.toFixed?.(2) ?? currentResult.mse}`, interp: currentResult.mse < 50 ? 'Good — low pixel distortion' : 'Moderate distortion detected' },
-                  { metric: 'PSNR', value: `${currentResult.psnr?.toFixed?.(2) ?? currentResult.psnr} dB`, interp: currentResult.psnr >= 30 ? 'Acceptable quality (≥ 30 dB threshold)' : 'Below recommended threshold' },
+                  { metric: 'MSE', value: lossless ? '0.00' : `${currentResult.mse?.toFixed?.(2) ?? currentResult.mse}`, interp: lossless ? 'Lossless — zero pixel error' : currentResult.mse < 50 ? 'Good — low pixel distortion' : 'Moderate distortion detected' },
+                  { metric: 'PSNR', value: lossless ? '∞' : `${currentResult.psnr?.toFixed?.(2) ?? currentResult.psnr} dB`, interp: lossless ? 'Perfect reconstruction (MSE = 0)' : currentResult.psnr >= 30 ? 'Acceptable quality (≥ 30 dB threshold)' : 'Below recommended threshold' },
                   { metric: 'Compression Ratio', value: currentResult.cr, interp: 'File size reduced significantly' },
                   { metric: 'Sparsity Ratio', value: currentResult.sparsity, interp: 'High proportion of zero coefficients' },
                 ].map((row, i) => (

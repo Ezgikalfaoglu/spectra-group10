@@ -10,9 +10,10 @@ import { Code2, ArrowRight, Info } from 'lucide-react';
 import { PipelineStepper } from '../components/PipelineStepper';
 import { TypePresetBanner } from '../components/TypePresetBanner';
 import { computeMetrics } from '../lib/pipeline';
-import { analyzeImage } from '../lib/analysis';
+import { analyzeChannels } from '../lib/analysis';
 import { analyzeEntropy } from '../lib/entropy';
 import type { SubbandStat, Filter } from '../lib/dwt';
+import type { ColorSpace } from '../lib/preprocess';
 
 interface EntropySettings {
   coder: 'huffman-default' | 'huffman-custom' | 'arithmetic';
@@ -38,6 +39,7 @@ interface TransformState {
 interface PreprocData {
   planeDataUrl?: string;
   levelShift?: boolean;
+  colorSpace?: ColorSpace;
 }
 
 const DEFAULTS: EntropySettings = {
@@ -140,23 +142,27 @@ export function EntropyPage() {
   const update = <K extends keyof EntropySettings>(k: K, v: EntropySettings[K]) =>
     setSettings(s => ({ ...s, [k]: v }));
 
-  // Recompute the real leaf coefficients so we can measure actual entropy.
-  const analysisSource = preproc?.planeDataUrl || uploadSource;
+  // Recompute the real leaf coefficients across ALL channels of the color space
+  // so entropy is measured over the whole image (R+G+B / Y+Cb+Cr / L).
+  const analysisSource = uploadSource || preproc?.planeDataUrl || '';
+  const colorSpace: ColorSpace = preproc?.colorSpace ?? 'luma';
   useEffect(() => {
     if (!analysisSource) { setCoeffSubbands(null); return; }
     const isJ2K = transform.method === 'jpeg2000';
     const filter: Filter = isJ2K ? ((transform.waveletFilter as Filter) || 'db4') : 'db4';
     const level = isJ2K ? (transform.decompositionLevel || 2) : 2;
     let cancelled = false;
-    analyzeImage({ source: analysisSource, filter, level, levelShift: preproc?.levelShift, keepCoeffs: true })
-      .then(res => { if (!cancelled) setCoeffSubbands(res ? res.subbands : null); })
+    analyzeChannels({ source: analysisSource, colorSpace, filter, level, levelShift: preproc?.levelShift })
+      .then(res => { if (!cancelled) setCoeffSubbands(res); })
       .catch(() => { if (!cancelled) setCoeffSubbands(null); });
     return () => { cancelled = true; };
-  }, [analysisSource, preproc?.levelShift, transform.method, transform.waveletFilter, transform.decompositionLevel]);
+  }, [analysisSource, colorSpace, preproc?.levelShift, transform.method, transform.waveletFilter, transform.decompositionLevel]);
 
-  // Real entropy measurement on the actual quantized symbols.
+  // Real entropy measurement on the actual quantized symbols. Channel count
+  // makes bpp / bitstream size reflect the full color payload.
+  const channels = colorSpace === 'luma' ? 1 : 3;
   const realEntropy = coeffSubbands
-    ? analyzeEntropy(coeffSubbands, quant.stepSize, settings.coder, quant.lossless)
+    ? analyzeEntropy(coeffSubbands, quant.stepSize, settings.coder, quant.lossless, channels)
     : null;
 
   // Model fallback (used until the coefficient analysis finishes).
@@ -224,6 +230,7 @@ export function EntropyPage() {
 
       <TypePresetBanner
         stage="entropy"
+        coderOverride={settings.coder}
         onApply={(p) => setSettings(s => ({ ...s, coder: p.coder }))}
       />
 

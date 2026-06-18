@@ -217,6 +217,77 @@ function split2D(
   return { LL, HL, LH: LHs, HH };
 }
 
+// Inverse of split2D — synthesis. For an orthonormal filter bank the synthesis
+// operator is the adjoint (transpose) of the analysis operator, so we scatter
+// each coefficient back with the same filter taps it was gathered with.
+// Perfect reconstruction: synthesize2D(split2D(x)) === x (to float precision).
+function synthesize2D(
+  LL: Float32Array, HL: Float32Array, LH: Float32Array, HH: Float32Array,
+  half: number, f: Filter,
+): Float32Array {
+  const side = half << 1;
+  const { lo, hi } = getFilter(f);
+  const L = lo.length;
+
+  // Inverse pass 2 (cols): rebuild rowLo from (LL,HL), rowHi from (LH,HH).
+  const rowLo = new Float32Array(side * half);
+  const rowHi = new Float32Array(side * half);
+  for (let c = 0; c < half; c++) {
+    for (let k = 0; k < half; k++) {
+      const ll = LL[k * half + c], hl = HL[k * half + c];
+      const lh = LH[k * half + c], hh = HH[k * half + c];
+      const start = 2 * k;
+      for (let n = 0; n < L; n++) {
+        const r = (start + n) % side;
+        rowLo[r * half + c] += lo[n] * ll + hi[n] * hl;
+        rowHi[r * half + c] += lo[n] * lh + hi[n] * hh;
+      }
+    }
+  }
+
+  // Inverse pass 1 (rows): rebuild the band from (rowLo, rowHi).
+  const band = new Float32Array(side * side);
+  for (let r = 0; r < side; r++) {
+    const rowBase = r * half;
+    const outBase = r * side;
+    for (let k = 0; k < half; k++) {
+      const vLo = rowLo[rowBase + k], vHi = rowHi[rowBase + k];
+      const start = 2 * k;
+      for (let n = 0; n < L; n++) {
+        const m = (start + n) % side;
+        band[outBase + m] += lo[n] * vLo + hi[n] * vHi;
+      }
+    }
+  }
+  return band;
+}
+
+// Inverse wavelet-packet transform. Rebuilds the image from the (possibly
+// quantized) leaf coefficients, following the same adaptive tree the forward
+// pass produced (leaves keyed by `chain`). Internal nodes always have all four
+// children present, so the recursion is well defined.
+export function waveletPacketInverse(
+  subbands: SubbandStat[],
+  imageSize: number,
+  filter: Filter,
+): Float32Array {
+  const leaves = new Map<string, SubbandStat>();
+  for (const b of subbands) leaves.set(b.chain, b);
+
+  function recon(chain: string, side: number): Float32Array {
+    const leaf = leaves.get(chain);
+    if (leaf && leaf.coeffs) return leaf.coeffs;
+    const half = side >> 1;
+    const LL = recon(chain + 'LL', half);
+    const HL = recon(chain + 'HL', half);
+    const LH = recon(chain + 'LH', half);
+    const HH = recon(chain + 'HH', half);
+    return synthesize2D(LL, HL, LH, HH, half, filter);
+  }
+
+  return recon('', imageSize);
+}
+
 function computeStat(chain: string, depth: number, band: Float32Array, side: number): SubbandStat {
   let sum = 0, sumAbs = 0, sumSq = 0, max = 0, zeroCount = 0;
   for (let i = 0; i < band.length; i++) {

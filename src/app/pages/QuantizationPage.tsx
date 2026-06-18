@@ -26,7 +26,8 @@ import { TypePresetBanner } from '../components/TypePresetBanner';
 import { DCTBlockPanel } from '../components/DCTBlockPanel';
 import { DWTSubbandsViz } from '../components/DWTSubbandsViz';
 import { computeMetrics } from '../lib/pipeline';
-import { analyzeImage } from '../lib/analysis';
+import { analyzeChannels } from '../lib/analysis';
+import type { ColorSpace } from '../lib/preprocess';
 import { quantizeSubbands, type QuantResult } from '../lib/quantize';
 import type { SubbandStat, Filter } from '../lib/dwt';
 
@@ -46,6 +47,7 @@ interface StoredTransform {
 interface PreprocData {
   planeDataUrl?: string;
   levelShift?: boolean;
+  colorSpace?: ColorSpace;
 }
 
 const DEFAULT_TRANSFORM: StoredTransform = {
@@ -132,21 +134,22 @@ export function QuantizationPage() {
     }
   }, [transform?.method, settings.quantizationType]);
 
-  // Recompute the real leaf coefficients from the (preprocessed) image so we can
-  // run actual quantization on them — not a model. Mirrors the Transform page's
-  // analysis settings (JPEG path characterised with db4 / L2).
-  const analysisSource = preproc?.planeDataUrl || uploadSource;
+  // Recompute the real leaf coefficients across ALL channels of the chosen color
+  // space (R+G+B / Y+Cb+Cr / L) from the original image, so quantization runs on
+  // real coefficients — not a model, and not just one plane.
+  const analysisSource = uploadSource || preproc?.planeDataUrl || '';
+  const colorSpace: ColorSpace = preproc?.colorSpace ?? 'luma';
   useEffect(() => {
     if (!transform || !analysisSource) { setCoeffSubbands(null); return; }
     const isJ2K = transform.method === 'jpeg2000';
     const filter: Filter = isJ2K ? (transform.waveletFilter as Filter) : 'db4';
     const level = isJ2K ? transform.decompositionLevel : 2;
     let cancelled = false;
-    analyzeImage({ source: analysisSource, filter, level, levelShift: preproc?.levelShift, keepCoeffs: true })
-      .then(res => { if (!cancelled) setCoeffSubbands(res ? res.subbands : null); })
+    analyzeChannels({ source: analysisSource, colorSpace, filter, level, levelShift: preproc?.levelShift })
+      .then(res => { if (!cancelled) setCoeffSubbands(res); })
       .catch(() => { if (!cancelled) setCoeffSubbands(null); });
     return () => { cancelled = true; };
-  }, [analysisSource, preproc?.levelShift, transform?.method, transform?.waveletFilter, transform?.decompositionLevel]);
+  }, [analysisSource, colorSpace, preproc?.levelShift, transform?.method, transform?.waveletFilter, transform?.decompositionLevel]);
 
   const handleNext = () => {
     const payload: Record<string, unknown> = {
@@ -183,6 +186,22 @@ export function QuantizationPage() {
     if (!coeffSubbands || coeffSubbands.length === 0) return null;
     return quantizeSubbands(coeffSubbands, effectiveStep, settings.lossless);
   }, [coeffSubbands, effectiveStep, settings.lossless]);
+
+  // Persist the selection on every change (not only on "Next"), so navigating
+  // away and back — or visiting another stage — doesn't revert the controls to
+  // the last-saved value.
+  useEffect(() => {
+    if (!isHydrated) return;
+    const payload: Record<string, unknown> = { ...settings };
+    if (realQuant) {
+      payload.realMse = realQuant.mse;
+      payload.realPsnr = realQuant.psnr;
+      payload.realSparsity = realQuant.sparsity;
+      payload.totalCoeffs = realQuant.totalCoeffs;
+      payload.zeroCoeffs = realQuant.zeroCoeffs;
+    }
+    try { localStorage.setItem('spectra_quantization', JSON.stringify(payload)); } catch { /* ignore */ }
+  }, [settings, realQuant, isHydrated]);
 
   // Live preview — same model as Entropy/Processing (coder defaults to the
   // pipeline baseline since the entropy stage hasn't been visited yet).

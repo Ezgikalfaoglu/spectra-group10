@@ -6,7 +6,9 @@ import {
   Activity, CheckCircle2, AlertTriangle, Terminal,
 } from 'lucide-react';
 import { PipelineStepper } from '../components/PipelineStepper';
-import type { SubbandStat } from '../lib/dwt';
+import type { SubbandStat, Filter } from '../lib/dwt';
+import { reconstructImage } from '../lib/analysis';
+import type { ColorSpace } from '../lib/preprocess';
 import { computeMetrics, type Coder } from '../lib/pipeline';
 
 const query = new URLSearchParams(window.location.search);
@@ -27,6 +29,9 @@ interface QuantizationSettings {
 interface EntropySettings {
   coder: Coder;
   realCr?: number; realBpp?: number; realBits?: number;
+}
+interface PreprocData {
+  planeDataUrl?: string; levelShift?: boolean; colorSpace?: ColorSpace;
 }
 interface Results {
   mse: number; psnr: number; compressionRatio: string; sparsityRatio: string;
@@ -49,6 +54,30 @@ function parsePixels(resolution: string): number {
   if (!match) return 1024 * 1024;
   return Number(match[1]) * Number(match[2]);
 }
+
+// Small thumbnail for the history list — storing the full image per run quickly
+// fills the localStorage quota and blocks new uploads from being saved.
+function makeThumbnail(dataUrl: string, maxSide = 240): Promise<string> {
+  return new Promise((resolve) => {
+    if (!dataUrl) { resolve(''); return; }
+    const img = new window.Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      const ctx = c.getContext('2d');
+      if (!ctx) { resolve(dataUrl); return; }
+      ctx.drawImage(img, 0, 0, w, h);
+      try { resolve(c.toDataURL('image/jpeg', 0.6)); } catch { resolve(dataUrl); }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+const HISTORY_LIMIT = 20;
 
 // Prefer the real measured values from the Quantization (MSE/PSNR/sparsity) and
 // Entropy (CR/bpp) stages. Fall back to the model only for whatever is missing.
@@ -95,6 +124,7 @@ export function ProcessingPage() {
   const [transform, setTransform] = useState<TransformSettings | null>(null);
   const [quant, setQuant] = useState<QuantizationSettings | null>(null);
   const [entropy, setEntropy] = useState<EntropySettings | null>(null);
+  const [preproc, setPreproc] = useState<PreprocData | null>(null);
 
   const [currentStep, setCurrentStep] = useState(-1);
   const [isRunning, setIsRunning] = useState(false);
@@ -128,6 +158,9 @@ export function ProcessingPage() {
       navigate('/upload');
       return;
     }
+
+    const pp = localStorage.getItem('spectra_preprocessing');
+    if (pp) { try { setPreproc(JSON.parse(pp)); } catch { /* ignore */ } }
 
     // Entropy stage is optional — fall back to default coder if not visited.
     const e = localStorage.getItem('spectra_entropy');
@@ -166,11 +199,46 @@ export function ProcessingPage() {
         ]);
 
         if (idx === PIPELINE_STAGES.length - 1) {
-          const finalId = window.setTimeout(() => {
+          const finalId = window.setTimeout(async () => {
             const r = computeResults(transform, quant, entropy, upload.imageType, upload.resolution);
+
+            // The reported compressed size must use the SAME image the download
+            // re-encodes (the stored ≤1024px version), not the original full-res
+            // dimensions — otherwise measured KB and downloaded KB disagree badly.
+            try {
+              const dims = await new Promise<{ w: number; h: number } | null>((res) => {
+                const im = new window.Image();
+                im.onload = () => res({ w: im.naturalWidth || im.width, h: im.naturalHeight || im.height });
+                im.onerror = () => res(null);
+                im.src = upload.dataUrl;
+              });
+              if (dims && r.bpp) {
+                r.outputKB = Math.max(1, Math.round((dims.w * dims.h * r.bpp) / (8 * 1024)));
+              }
+            } catch { /* keep the resolution-string estimate */ }
+
             setResults(r);
             setIsRunning(false);
             setIsDone(true);
+
+            // Real decoded preview: forward → quantize → inverse DWT of every
+            // channel, recombined to color. What the user sees is the actual
+            // reconstruction at this step, so the visible degradation matches the
+            // measured MSE/PSNR. Best-effort — never let it block the result.
+            let reconstructedDataUrl = '';
+            try {
+              const isJ2K = transform.method === 'jpeg2000';
+              const recon = await reconstructImage({
+                source: upload.dataUrl,                       // original color image
+                colorSpace: preproc?.colorSpace ?? 'ycbcr',   // reconstruct all channels → color
+                filter: (isJ2K ? transform.waveletFilter : 'db4') as Filter,
+                level: isJ2K ? transform.decompositionLevel : 2,
+                step: quant.lossless ? 1 : quant.stepSize,
+                lossless: quant.lossless,
+                levelShift: preproc?.levelShift,
+              });
+              if (recon) reconstructedDataUrl = recon;
+            } catch { /* ignore — fall back to the stored image */ }
 
             const entry = {
               id: Date.now().toString(),
@@ -192,6 +260,7 @@ export function ProcessingPage() {
               outputKB: r.outputKB,
               measured: r.measured,
               imageDataUrl: upload.dataUrl,
+              reconstructedDataUrl,
               settings: {
                 method: transform.method,
                 waveletFilter: transform.waveletFilter,
@@ -202,16 +271,24 @@ export function ProcessingPage() {
               },
             };
 
+            // lastResult keeps the full image (Results preview + download need it);
+            // history keeps only a thumbnail and is capped, so the quota never
+            // fills up and blocks the next upload from being saved.
+            const thumb = await makeThumbnail(upload.dataUrl);
+            // History keeps only a thumbnail — drop the heavy full + reconstructed images.
+            const historyEntry = { ...entry, imageDataUrl: thumb, reconstructedDataUrl: '' };
+
             try {
-              const history = JSON.parse(localStorage.getItem('compressionHistory') || '[]');
-              history.unshift(entry);
-              localStorage.setItem('compressionHistory', JSON.stringify(history));
               localStorage.setItem('lastResult', JSON.stringify(entry));
-            } catch (err) {
-              // localStorage quota exceeded — keep just the latest result
-              try {
-                localStorage.setItem('lastResult', JSON.stringify(entry));
-              } catch { /* ignore */ }
+            } catch { /* ignore — result still shown from state */ }
+
+            try {
+              const prev = JSON.parse(localStorage.getItem('compressionHistory') || '[]');
+              const history = [historyEntry, ...(Array.isArray(prev) ? prev : [])].slice(0, HISTORY_LIMIT);
+              localStorage.setItem('compressionHistory', JSON.stringify(history));
+            } catch {
+              // Quota — reset history to just this run.
+              try { localStorage.setItem('compressionHistory', JSON.stringify([historyEntry])); } catch { /* ignore */ }
             }
           }, 500);
           timeouts.push(finalId);

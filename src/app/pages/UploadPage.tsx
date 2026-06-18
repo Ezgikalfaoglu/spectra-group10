@@ -123,14 +123,24 @@ function safeSetUpload(value: object): void {
     localStorage.setItem('spectra_upload', json);
     return;
   } catch {
-    // Drop dataUrl and retry — downstream pages handle missing dataUrl.
+    // Quota full (usually from accumulated history) — free the bulky stale keys
+    // and retry with the real image so a new upload always overwrites the old.
+    for (const k of ['compressionHistory', 'lastResult', 'spectra_transform', 'spectra_preprocessing']) {
+      try { localStorage.removeItem(k); } catch { /* ignore */ }
+    }
     try {
-      localStorage.setItem(
-        'spectra_upload',
-        JSON.stringify({ ...(value as object), dataUrl: '' }),
-      );
+      localStorage.setItem('spectra_upload', json);
+      return;
     } catch {
-      // Give up — navigation will still happen.
+      // Still too big — store without the heavy dataUrl as a last resort.
+      try {
+        localStorage.setItem(
+          'spectra_upload',
+          JSON.stringify({ ...(value as object), dataUrl: '' }),
+        );
+      } catch {
+        // Give up — navigation will still happen.
+      }
     }
   }
 }
@@ -251,6 +261,13 @@ export function UploadPage() {
           setErrorFileName('');
 
           safeSetUpload(uploadedFile);
+
+          // A new specimen invalidates every downstream stage — clear stale
+          // settings/results so the new image starts a fresh pipeline instead of
+          // inheriting the previous run's lossless flag, step size, coefficients, etc.
+          for (const k of ['spectra_preprocessing', 'spectra_transform', 'spectra_quantization', 'spectra_entropy', 'lastResult']) {
+            try { localStorage.removeItem(k); } catch { /* ignore */ }
+          }
         };
 
         img.onload = () => finalize(img.width, img.height);

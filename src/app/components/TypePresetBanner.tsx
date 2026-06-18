@@ -21,9 +21,11 @@ type Stage = 'transform' | 'quantize' | 'entropy';
 export function TypePresetBanner({
   stage,
   onApply,
+  coderOverride,
 }: {
   stage: Stage;
   onApply: (profile: TypeProfile) => void;
+  coderOverride?: string; // entropy stage: show the user's selected coder
 }) {
   const [profile, setProfile] = useState<TypeProfile | null>(null);
 
@@ -53,7 +55,7 @@ export function TypePresetBanner({
         { k: 'CR bonus',         v: `×${profile.crBonus.toFixed(2)}` },
       ]
     : [
-        { k: 'Coder',            v: profile.coder.replace('huffman-', 'Huffman · ').replace('arithmetic', 'Arithmetic') },
+        { k: 'Coder',            v: (coderOverride ?? profile.coder).replace('huffman-', 'Huffman · ').replace('arithmetic', 'Arithmetic') },
         { k: 'Lossless',         v: profile.forceLossless ? 'Yes' : 'No' },
         { k: 'CR bonus',         v: `×${profile.crBonus.toFixed(2)}` },
       ];

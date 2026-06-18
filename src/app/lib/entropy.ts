@@ -91,58 +91,93 @@ export function analyzeEntropy(
   step: number,
   coder: Coder,
   lossless: boolean,
+  channels = 1,
 ): EntropyResult | null {
   const s = Math.max(1e-6, lossless ? 1 : step);
   const hist = new Map<number, number>();
   const buckets = [0, 0, 0, 0, 0]; // |idx| = 0,1,2,3,≥4
   let n = 0;
 
+  // Run-length transform (as real JPEG/JPEG2000 entropy coders do): collapse
+  // zero runs and emit a (run, size) token per nonzero coefficient, plus the
+  // raw value bits. Without this, per-symbol Huffman pays ≥1 bit for every zero
+  // and looks ~5× worse than arithmetic — unrealistic. With it both coders work
+  // on the same compact token stream and land within a few percent of each other.
+  const tokenHist = new Map<string, number>();
+  let rawBits = 0;     // magnitude bits carried verbatim after each (run,size) token
+  let nTokens = 0;
+  const ZRL = 16;      // max zero-run per token (JPEG convention)
+
   for (const b of subbands) {
     const c = b.coeffs;
     if (!c) continue;
+    let run = 0;
     for (let i = 0; i < c.length; i++) {
       const idx = quantIndex(c[i], s);
       hist.set(idx, (hist.get(idx) ?? 0) + 1);
       const a = Math.abs(idx);
       buckets[a >= 4 ? 4 : a]++;
       n++;
+
+      if (idx === 0) {
+        run++;
+        if (run === ZRL) { tokenHist.set('ZRL', (tokenHist.get('ZRL') ?? 0) + 1); nTokens++; run = 0; }
+      } else {
+        const size = Math.floor(Math.log2(a)) + 1; // bits to store the magnitude
+        const key = `${run}/${size}`;
+        tokenHist.set(key, (tokenHist.get(key) ?? 0) + 1);
+        rawBits += size;
+        nTokens++;
+        run = 0;
+      }
     }
+    if (run > 0) { tokenHist.set('EOB', (tokenHist.get('EOB') ?? 0) + 1); nTokens++; } // trailing zeros → end-of-band
   }
 
   if (n === 0) return null;
 
-  // Shannon entropy.
+  // Shannon entropy of the raw coefficient symbols (shown to the user).
   let H = 0;
   for (const cnt of hist.values()) {
     const p = cnt / n;
     H -= p * Math.log2(p);
   }
-
   const distinct = hist.size;
-  const L = huffmanAvgLen([...hist.values()], n);
 
-  // Coder cost model — all anchored to the measured H / L.
-  let avgCodeLen: number;
+  // Token-stream entropy + Huffman average length — the real coded cost.
+  let tokenEntropy = 0;
+  for (const cnt of tokenHist.values()) {
+    const p = cnt / Math.max(1, nTokens);
+    tokenEntropy -= p * Math.log2(p);
+  }
+  const Ltok = huffmanAvgLen([...tokenHist.values()], Math.max(1, nTokens));
+
+  // Coder cost = (token coding) + raw magnitude bits.
+  let tokenBits: number;
   let overheadBits = 0;
   if (coder === 'arithmetic') {
-    avgCodeLen = H;                       // near the entropy limit
+    tokenBits = tokenEntropy * nTokens;            // near the entropy limit
   } else if (coder === 'huffman-custom') {
-    avgCodeLen = L;
-    overheadBits = distinct * 8;          // store the per-image code lengths
+    tokenBits = Ltok * nTokens;
+    overheadBits = tokenHist.size * 8;             // store the per-image code lengths
   } else {
-    avgCodeLen = L * 1.06;                // static tables: ~6% off-optimal, no overhead
+    tokenBits = Ltok * 1.06 * nTokens;             // static tables: ~6% off-optimal
   }
 
-  const bits = Math.max(1, avgCodeLen * n + overheadBits);
-  const bpp = bits / n;
-  const cr = Math.min(CR_CEIL, Math.max(1, 8 / bpp));
+  const bits = Math.max(1, tokenBits + rawBits + overheadBits);
+  // n = channels × pixels. bpp is reported per PIXEL (summed over all channels),
+  // so a 3-channel RGB payload shows ~3× the per-sample rate. CR compares against
+  // the 8-bit-per-sample source and is channel-count-independent (= 8·n / bits).
+  const perSample = bits / n;
+  const bpp = perSample * channels;
+  const cr = Math.min(CR_CEIL, Math.max(1, 8 / perSample));
 
   return {
     bits: Math.round(bits),
     bpp: +bpp.toFixed(3),
     cr: +cr.toFixed(1),
     entropy: +H.toFixed(3),
-    avgCodeLen: +avgCodeLen.toFixed(3),
+    avgCodeLen: +perSample.toFixed(3),   // effective coded bits per coefficient
     nSymbols: n,
     distinctSymbols: distinct,
     buckets: [
