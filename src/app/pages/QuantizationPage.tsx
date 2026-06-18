@@ -557,11 +557,11 @@ export function QuantizationPage() {
                   </span>
                   <span>→ Compression</span>
                 </div>
-                <div style={{ height: 8, borderRadius: 4, background: 'linear-gradient(90deg, var(--leaf), var(--klein), var(--amber), #d4574c)', position: 'relative', marginBottom: 6 }}>
+                <div style={{ position: 'relative', paddingTop: 18, marginBottom: 6 }}>
                   <div style={{
                     position: 'absolute',
                     left: `${qualityScaleLeft}%`,
-                    top: -24,
+                    top: 0,
                     transform: 'translateX(-50%)',
                     fontFamily: 'var(--font-mono)',
                     fontSize: 9,
@@ -570,28 +570,30 @@ export function QuantizationPage() {
                   }}>
                     {settings.lossless ? 'Δ1' : `Δ${effectiveStep}`}
                   </div>
-                  <motion.div
-                    animate={{
-                      left: `${qualityScaleLeft}%`,
-                      scale: settings.lossless ? [1, 1.08, 1] : 1,
-                    }}
-                    transition={{
-                      left: { type: 'spring', stiffness: 200, damping: 25 },
-                      scale: settings.lossless
-                        ? { duration: 1.8, repeat: Infinity, ease: 'easeInOut' }
-                        : { duration: 0.2 },
-                    }}
-                    style={{
-                      position: 'absolute', top: -4, width: 16, height: 16,
-                      borderRadius: '50%',
-                      background: settings.lossless ? 'var(--leaf)' : 'white',
-                      border: `2px solid ${settings.lossless ? 'var(--leaf)' : 'var(--ink)'}`,
-                      transform: 'translateX(-50%)',
-                      boxShadow: settings.lossless
-                        ? '0 0 0 4px rgba(45,142,94,0.18), 0 2px 6px rgba(0,0,0,0.16)'
-                        : '0 2px 6px rgba(0,0,0,0.2)',
-                    }}
-                  />
+                  <div style={{ height: 8, borderRadius: 4, background: 'linear-gradient(90deg, var(--leaf), var(--klein), var(--amber), #d4574c)', position: 'relative' }}>
+                    <motion.div
+                      animate={{
+                        left: `${qualityScaleLeft}%`,
+                        scale: settings.lossless ? [1, 1.08, 1] : 1,
+                      }}
+                      transition={{
+                        left: { type: 'spring', stiffness: 200, damping: 25 },
+                        scale: settings.lossless
+                          ? { duration: 1.8, repeat: Infinity, ease: 'easeInOut' }
+                          : { duration: 0.2 },
+                      }}
+                      style={{
+                        position: 'absolute', top: -4, width: 16, height: 16,
+                        borderRadius: '50%',
+                        background: settings.lossless ? 'var(--leaf)' : 'white',
+                        border: `2px solid ${settings.lossless ? 'var(--leaf)' : 'var(--ink)'}`,
+                        transform: 'translateX(-50%)',
+                        boxShadow: settings.lossless
+                          ? '0 0 0 4px rgba(45,142,94,0.18), 0 2px 6px rgba(0,0,0,0.16)'
+                          : '0 2px 6px rgba(0,0,0,0.2)',
+                      }}
+                    />
+                  </div>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-4)', letterSpacing: '0.08em' }}>
                   <span>Δ1</span>
